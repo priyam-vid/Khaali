@@ -5,6 +5,7 @@ import { Period, Room, Occupancy, DayIndex } from '@/lib/domain/rooms';
 import { createOccupancyStore } from '@/lib/domain/occupancy';
 import { evaluateVacancy, ExtendedFreeRun } from '@/lib/domain/vacancy';
 import { detectCurrentPeriod, getISTTimeInfo } from '@/lib/domain/time';
+import { applySubstitutions, SubstitutionChange } from '@/lib/edupage/substitutions';
 import { HeroAnswer } from './HeroAnswer';
 import { RoomRow } from './RoomRow';
 import { FilterChips, FilterBuilding } from './FilterChips';
@@ -27,16 +28,106 @@ interface KhaaliClientProps {
   initialData: KhaaliInitialData;
 }
 
+function parseDateFromDDMMYYYY(dateStr: string): Date | null {
+  const parts = dateStr.split('/');
+  if (parts.length !== 3) return null;
+  const d = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10) - 1;
+  const y = parseInt(parts[2], 10);
+  return new Date(y, m, d);
+}
+
+function checkOutsideValidityWindow(
+  now: Date,
+  window?: { startDate: string; endDate: string }
+): boolean {
+  if (!window || !window.startDate || !window.endDate) return false;
+  const start = parseDateFromDDMMYYYY(window.startDate);
+  const end = parseDateFromDDMMYYYY(window.endDate);
+  if (!start || !end) return false;
+
+  end.setHours(23, 59, 59, 999);
+  return now < start || now > end;
+}
+
 export function KhaaliClient({ initialData }: KhaaliClientProps) {
-  const { periods, rooms, occupancies, validityWindow, fromFallback, fetchedAt } = initialData;
+  const [data, setData] = useState<KhaaliInitialData>(initialData);
+  const [isStaleData, setIsStaleData] = useState<boolean>(initialData.fromFallback);
+  const [substitutions, setSubstitutions] = useState<SubstitutionChange[]>([]);
+
+  // Cache initial payload to localStorage for offline campus Wi-Fi resiliency
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.setItem('khaali_cached_timetable', JSON.stringify(initialData));
+      }
+    } catch {
+      // Ignore quota errors
+    }
+  }, [initialData]);
+
+  // If initial payload failed upstream, attempt restoring last-known-good from localStorage
+  useEffect(() => {
+    if (initialData.fromFallback) {
+      try {
+        const stored = localStorage.getItem('khaali_cached_timetable');
+        if (stored) {
+          const parsed = JSON.parse(stored) as KhaaliInitialData;
+          if (parsed && parsed.periods && parsed.rooms) {
+            setData(parsed);
+            setIsStaleData(true);
+          }
+        }
+      } catch {
+        // Fallback safely
+      }
+    }
+  }, [initialData.fromFallback]);
+
+  // Fetch near-live substitutions (ISR 300s) on mount
+  useEffect(() => {
+    let cancelled = false;
+    async function loadSubstitutions() {
+      try {
+        const res = await fetch('/api/substitutions');
+        if (!res.ok) return;
+        const json = await res.json();
+        if (!cancelled && json && Array.isArray(json.substitutions)) {
+          setSubstitutions(json.substitutions);
+        }
+      } catch {
+        // Safe offline silent catch
+      }
+    }
+
+    loadSubstitutions();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const { periods, rooms, occupancies, validityWindow, fetchedAt } = data;
+
+  // Merge today's substitutions if active
+  const effectiveOccupancies = useMemo(() => {
+    if (substitutions.length === 0) return occupancies;
+    const ist = getISTTimeInfo();
+    const day = (ist.dayIndex ?? 0) as DayIndex;
+    return applySubstitutions(occupancies, substitutions, rooms, day);
+  }, [occupancies, substitutions, rooms]);
 
   // Occupancy store with O(1) indexed lookups
-  const occupancyStore = useMemo(() => createOccupancyStore(occupancies), [occupancies]);
+  const occupancyStore = useMemo(() => createOccupancyStore(effectiveOccupancies), [effectiveOccupancies]);
 
   // Current system / IST state
   const [now, setNow] = useState<Date>(() => new Date());
   const istInfo = useMemo(() => getISTTimeInfo(now), [now]);
   const detection = useMemo(() => detectCurrentPeriod(periods, now), [periods, now]);
+
+  // Check if current date is outside validity window
+  const isOutsideValidity = useMemo(() => {
+    return checkOutsideValidityWindow(now, validityWindow);
+  }, [now, validityWindow]);
 
   // Selected Day & Period states
   const [selectedDay, setSelectedDay] = useState<DayIndex>(() => {
@@ -47,13 +138,8 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
     return detection.activePeriodIndex;
   });
 
-  // Track if user manually selected a slot or if viewing auto-detected live slot
   const [isManualTime, setIsManualTime] = useState(false);
-
-  // Filter building state
   const [selectedBuilding, setSelectedBuilding] = useState<FilterBuilding>('ALL');
-
-  // Never-scheduled accordion state
   const [neverScheduledOpen, setNeverScheduledOpen] = useState(false);
 
   // Live IST Clock ticking (every 1 second)
@@ -70,7 +156,6 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
       const currentNow = new Date();
       const newDetection = detectCurrentPeriod(periods, currentNow);
 
-      // If user hasn't manually overridden the slot, automatically follow live period
       if (!isManualTime) {
         if (newDetection.dayIndex !== null) {
           setSelectedDay(newDetection.dayIndex);
@@ -200,12 +285,13 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
 
         {/* Status Warnings & Stale Data Banner */}
         <StatusBanner
-          isStale={fromFallback}
+          isStale={isStaleData}
           staleTime={new Date(fetchedAt).toLocaleTimeString('en-US', {
             hour: '2-digit',
             minute: '2-digit',
             timeZone: 'Asia/Kolkata',
           })}
+          isOutsideValidityWindow={isOutsideValidity}
           validityWindow={validityWindow}
         />
 
