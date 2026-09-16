@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --ink: #0E1014;
+  --surface: #171A21;
+  --surface-2: #1E222B;
+  --border: #252A34;
+  --text: #E9EBEF;
+  --muted: #8E97A6;
+
+  --free: #3DDC97;
+  --soon: #F2B544;
+  --busy: #5A6374;
+  --brand: #8C1D2F;
+}
+
+html.light {
+  --ink: #F7F8FA;
+  --surface: #FFFFFF;
+  --surface-2: #EDF0F5;
+  --border: #D4D9E2;
+  --text: #111418;
+  --muted: #586171;
+
+  --free: #0F8C58;
+  --soon: #B87600;
+  --busy: #767F90;
+  --brand: #8C1D2F;
+}
+
+body {
+  background-color: var(--ink);
+  color: var(--text);
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.mono {
+  font-family: var(--font-mono), 'JetBrains Mono', 'IBM Plex Mono', monospace;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+  }
+}
