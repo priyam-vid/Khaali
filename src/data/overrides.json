@@ -1,0 +1,10 @@
+{
+  "excludeRoomIds": [],
+  "excludeRoomNames": [],
+  "forceLabByName": [
+    "Digital Electronics-2",
+    "Digital Electronics-3"
+  ],
+  "buildingOverrides": {},
+  "displayNameOverrides": {}
+}
