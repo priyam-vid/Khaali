@@ -1,22 +1,24 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter, JetBrains_Mono } from 'next/font/google';
+import { IBM_Plex_Sans } from 'next/font/google';
+import localFont from 'next/font/local';
 import './globals.css';
 
-const inter = Inter({
+const ibmPlexSans = IBM_Plex_Sans({
   subsets: ['latin'],
-  variable: '--font-sans',
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-plex-sans',
   display: 'swap',
 });
 
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ['latin'],
-  variable: '--font-mono',
+const departureMono = localFont({
+  src: '../../public/fonts/DepartureMono-Regular.woff2',
+  variable: '--font-departure-mono',
   display: 'swap',
 });
 
 export const metadata: Metadata = {
-  title: 'Khaali — IILM University Classroom Vacancy',
-  description: 'Live classroom vacancy finder for School of Computer Science & Engineering, IILM University Greater Noida.',
+  title: 'Khaali — Departure Board',
+  description: 'Mechanical split-flap classroom vacancy board for School of Computer Science & Engineering, IILM University Greater Noida.',
   applicationName: 'Khaali',
   appleWebApp: {
     capable: true,
@@ -30,7 +32,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: '#0E1014',
+  themeColor: '#0D0D0F',
 };
 
 export default function RootLayout({
@@ -39,10 +41,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`dark ${inter.variable} ${jetbrainsMono.variable}`}>
-      <body className="min-h-screen bg-ink text-text selection:bg-brand selection:text-white">
+    <html lang="en" className={`dark ${ibmPlexSans.variable} ${departureMono.variable}`}>
+      <body className="min-h-screen bg-page-bg text-cell-ink selection:bg-brand selection:text-white">
         {children}
       </body>
     </html>
   );
 }
+

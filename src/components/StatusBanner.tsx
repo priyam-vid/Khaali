@@ -18,25 +18,29 @@ export const StatusBanner: React.FC<StatusBannerProps> = ({
   }
 
   return (
-    <div className="my-2 space-y-1.5" role="alert">
+    <div className="my-2 space-y-1" role="alert">
       {isStale && (
-        <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-mono flex items-start gap-2">
-          <span className="text-sm leading-none select-none">⚠</span>
-          <div>
-            Showing cached data from {staleTime || 'earlier'}. Couldn&apos;t reach the timetable server.
+        <div className="p-3 bg-board-case border border-signal/60 text-cell-ink text-xs font-mono flex items-start gap-2.5">
+          <span className="px-1.5 py-0.5 bg-signal text-page-bg font-bold shrink-0 text-[10px]">
+            ALERT
+          </span>
+          <div className="leading-relaxed">
+            Displaying cached timetable data from {staleTime || 'earlier'}. Server communication interrupted.
           </div>
         </div>
       )}
 
       {isOutsideValidityWindow && (
-        <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-mono flex items-start gap-2">
-          <span className="text-sm leading-none select-none">⚠</span>
-          <div>
-            This timetable may be out of date. Active validity window was{' '}
-            {validityWindow?.startDate} – {validityWindow?.endDate}.
+        <div className="p-3 bg-board-case border border-signal/60 text-cell-ink text-xs font-mono flex items-start gap-2.5">
+          <span className="px-1.5 py-0.5 bg-signal text-page-bg font-bold shrink-0 text-[10px]">
+            NOTICE
+          </span>
+          <div className="leading-relaxed">
+            Timetable validity period ({validityWindow?.startDate} – {validityWindow?.endDate}) has lapsed. Schedule may have changed.
           </div>
         </div>
       )}
     </div>
   );
 };
+

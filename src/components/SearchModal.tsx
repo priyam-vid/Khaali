@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { DayIndex, Period, Room, Occupancy } from '@/lib/domain/rooms';
 
 interface SearchModalProps {
@@ -26,6 +26,18 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   const [query, setQuery] = useState('');
   const [selectedProf, setSelectedProf] = useState<string>('Mr. Vikas Singh');
   const [selectedRoomId, setSelectedRoomId] = useState<string>('');
+
+  // Handle Escape key to close modal
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   // Auto-select first room or EB 305 if available
   useMemo(() => {
@@ -58,7 +70,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   );
   const selectedRoom = rooms.find(r => r.id === selectedRoomId);
 
-  // Professor current period status
+  // Current period status
   const currentProfClass = profSchedule.find(occ => occ.period === currentPeriod);
   const currentRoomClass = roomSchedule.find(occ => occ.period === currentPeriod);
 
@@ -66,25 +78,26 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/80 backdrop-blur-sm"
+      aria-label="Schedule Inquiry"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/85"
     >
-      <div className="w-full max-w-mobile bg-surface border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
-        {/* Header */}
-        <div className="flex items-center justify-between p-3.5 border-b border-border bg-surface-2">
-          <div className="flex items-center gap-2">
+      <div className="w-full max-w-lg bg-page-bg border border-hairline overflow-hidden flex flex-col max-h-[85vh]">
+        {/* Mechanical Header */}
+        <div className="flex items-center justify-between p-3 border-b border-hairline bg-board-case">
+          <div className="flex items-center gap-1.5 font-mono text-xs">
             <button
               type="button"
               onClick={() => {
                 setActiveTab('professors');
                 setQuery('');
               }}
-              className={`px-3 py-1 rounded text-xs font-mono font-bold transition-colors ${
+              className={`px-3 py-1.5 font-bold uppercase transition-colors border ${
                 activeTab === 'professors'
-                  ? 'bg-ink text-text border border-border'
-                  : 'text-muted hover:text-text'
+                  ? 'bg-cell-bg text-cell-ink border-signal border-b-2'
+                  : 'text-muted border-transparent hover:text-cell-ink'
               }`}
             >
-              Professors
+              FACULTY SCHEDULES
             </button>
             <button
               type="button"
@@ -92,50 +105,54 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                 setActiveTab('rooms');
                 setQuery('');
               }}
-              className={`px-3 py-1 rounded text-xs font-mono font-bold transition-colors ${
+              className={`px-3 py-1.5 font-bold uppercase transition-colors border ${
                 activeTab === 'rooms'
-                  ? 'bg-ink text-text border border-border'
-                  : 'text-muted hover:text-text'
+                  ? 'bg-cell-bg text-cell-ink border-signal border-b-2'
+                  : 'text-muted border-transparent hover:text-cell-ink'
               }`}
             >
-              Room Schedules
+              ROOM SCHEDULES
             </button>
           </div>
 
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close search"
-            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-ink text-muted hover:text-text text-sm font-mono"
+            aria-label="Close dialog [ESC]"
+            title="Close [ESC]"
+            className="px-2 py-1 bg-cell-bg border border-hairline text-muted hover:text-cell-ink text-xs font-mono uppercase"
           >
-            ✕
+            [ESC]
           </button>
         </div>
 
-        {/* Search Bar */}
-        <div className="p-3 border-b border-border bg-ink">
+        {/* Search Input Bar */}
+        <div className="p-3 border-b border-hairline bg-cell-bg">
           <input
             type="text"
             placeholder={
               activeTab === 'professors'
-                ? 'Search professor (e.g. Vikas Singh, AV)...'
-                : 'Search room (e.g. EB 305, Dell Lab)...'
+                ? 'Search faculty name (e.g. Vikas Singh, AV)...'
+                : 'Search room code (e.g. EB 305, Dell Lab)...'
             }
             value={query}
             onChange={e => setQuery(e.target.value)}
-            className="w-full px-3 py-2 rounded bg-surface border border-border font-mono text-xs text-text placeholder:text-muted focus:outline-none focus:border-brand"
+            className="w-full px-3 py-2 bg-page-bg border border-hairline font-mono text-xs text-cell-ink placeholder:text-muted focus:outline-none focus:border-signal"
             autoFocus
           />
         </div>
 
         {/* Modal Body */}
-        <div className="p-3 overflow-y-auto space-y-3">
+        <div className="p-3 overflow-y-auto space-y-3 font-mono">
           {activeTab === 'professors' ? (
             <div>
-              {/* Professor Suggestions */}
+              {/* Matches List */}
               {query && (
                 <div className="mb-3">
-                  <div className="text-[11px] font-mono text-muted uppercase mb-1">Matches:</div>
+                  <div className="text-[11px] text-muted uppercase mb-1 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 bg-signal shrink-0" aria-hidden="true" />
+                    <span>MATCHING FACULTY:</span>
+                  </div>
                   <div className="flex flex-wrap gap-1">
                     {filteredProfs.map(prof => (
                       <button
@@ -145,10 +162,10 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                           setSelectedProf(prof);
                           setQuery('');
                         }}
-                        className={`px-2 py-1 rounded font-mono text-xs border ${
+                        className={`px-2 py-1 text-xs border transition-colors ${
                           selectedProf === prof
-                            ? 'bg-brand/20 border-brand text-text font-bold'
-                            : 'bg-surface-2 border-border text-muted hover:text-text'
+                            ? 'bg-board-case border-signal text-cell-ink font-bold'
+                            : 'bg-cell-bg border-hairline text-muted hover:text-cell-ink'
                         }`}
                       >
                         {prof}
@@ -158,39 +175,39 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                 </div>
               )}
 
-              {/* Selected Professor Info */}
-              <div className="p-3 rounded bg-surface-2 border border-border">
-                <div className="text-xs font-mono text-muted">FACULTY MEMBER</div>
-                <div className="text-base font-bold font-mono text-text mt-0.5">{selectedProf}</div>
+              {/* Selected Professor Card */}
+              <div className="p-3 bg-cell-bg border border-hairline">
+                <div className="text-[10px] text-muted uppercase">FACULTY PROFILE</div>
+                <div className="text-base font-bold text-cell-ink mt-0.5">{selectedProf}</div>
 
                 {/* Right Now Status */}
-                <div className="mt-2 pt-2 border-t border-border">
-                  <div className="text-[11px] font-mono text-muted uppercase">Right Now (Period {currentPeriod}):</div>
+                <div className="mt-2.5 pt-2 border-t border-hairline">
+                  <div className="text-[11px] text-muted uppercase">STATUS (PERIOD {currentPeriod}):</div>
                   {currentProfClass ? (
-                    <div className="mt-1 font-mono text-xs">
-                      <span className="inline-block px-1.5 py-0.5 rounded bg-soon/20 text-soon font-bold mr-1.5 border border-soon/40">
-                        In Class
+                    <div className="mt-1 text-xs">
+                      <span className="inline-block px-1.5 py-0.5 bg-board-case text-signal font-bold mr-1.5 border border-signal/60 uppercase">
+                        IN CLASS
                       </span>
-                      <span className="font-bold text-text">
+                      <span className="font-bold text-cell-ink">
                         {rooms.find(r => r.id === currentProfClass.roomId)?.name || currentProfClass.roomId}
                       </span>
                       <span className="text-muted">
-                        {' '}· {currentProfClass.subjectName || currentProfClass.subjectCode} ({currentProfClass.batchNames.join(', ')})
+                        {' '}[{currentProfClass.subjectName || currentProfClass.subjectCode}] ({currentProfClass.batchNames.join(', ')})
                       </span>
                     </div>
                   ) : (
-                    <div className="mt-1 font-mono text-xs text-free flex items-center gap-1.5 font-bold">
-                      <span className="w-2 h-2 rounded-full bg-free" />
-                      Free / No scheduled class in Period {currentPeriod}
+                    <div className="mt-1 text-xs text-signal flex items-center gap-1.5 font-bold uppercase">
+                      <span className="w-2 h-2 bg-signal shrink-0" aria-hidden="true" />
+                      FREE | NO CLASS IN PERIOD {currentPeriod}
                     </div>
                   )}
                 </div>
 
-                {/* Today's Schedule */}
-                <div className="mt-3 pt-2 border-t border-border">
-                  <div className="text-[11px] font-mono text-muted uppercase mb-1.5">Today&apos;s Schedule:</div>
+                {/* Today's Schedule Breakdown */}
+                <div className="mt-3 pt-2 border-t border-hairline">
+                  <div className="text-[11px] text-muted uppercase mb-1.5">TODAY SCHEDULE:</div>
                   {profSchedule.length === 0 ? (
-                    <div className="text-xs font-mono text-muted">No classes scheduled today.</div>
+                    <div className="text-xs text-muted">No scheduled classes recorded for today.</div>
                   ) : (
                     <div className="space-y-1">
                       {periods.map(p => {
@@ -199,21 +216,21 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                         return (
                           <div
                             key={p.index}
-                            className={`flex items-center justify-between p-1.5 rounded font-mono text-xs ${
+                            className={`flex items-center justify-between p-1.5 text-xs border ${
                               p.index === currentPeriod
-                                ? 'bg-ink border border-border'
-                                : 'bg-surface/50'
+                                ? 'bg-board-case border-signal'
+                                : 'bg-page-bg border-hairline'
                             }`}
                           >
                             <span className="text-muted tabular-nums">
                               P{p.index} ({p.start})
                             </span>
                             {classInP ? (
-                              <span className="font-bold text-text truncate max-w-[200px]">
-                                {rName} · {classInP.batchNames.join(', ')}
+                              <span className="font-bold text-cell-ink truncate max-w-[220px]">
+                                {rName} [{classInP.batchNames.join(', ')}]
                               </span>
                             ) : (
-                              <span className="text-muted italic text-[11px]">Free</span>
+                              <span className="text-muted/60 uppercase text-[10px]">FREE</span>
                             )}
                           </div>
                         );
@@ -228,7 +245,10 @@ export const SearchModal: React.FC<SearchModalProps> = ({
               {/* Room Suggestions */}
               {query && (
                 <div className="mb-3">
-                  <div className="text-[11px] font-mono text-muted uppercase mb-1">Matches:</div>
+                  <div className="text-[11px] text-muted uppercase mb-1 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 bg-signal shrink-0" aria-hidden="true" />
+                    <span>MATCHING ROOMS:</span>
+                  </div>
                   <div className="flex flex-wrap gap-1">
                     {filteredRooms.map(r => (
                       <button
@@ -238,10 +258,10 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                           setSelectedRoomId(r.id);
                           setQuery('');
                         }}
-                        className={`px-2 py-1 rounded font-mono text-xs border ${
+                        className={`px-2 py-1 text-xs border transition-colors ${
                           selectedRoomId === r.id
-                            ? 'bg-brand/20 border-brand text-text font-bold'
-                            : 'bg-surface-2 border-border text-muted hover:text-text'
+                            ? 'bg-board-case border-signal text-cell-ink font-bold'
+                            : 'bg-cell-bg border-hairline text-muted hover:text-cell-ink'
                         }`}
                       >
                         {r.name}
@@ -253,64 +273,64 @@ export const SearchModal: React.FC<SearchModalProps> = ({
 
               {/* Selected Room Info */}
               {selectedRoom && (
-                <div className="p-3 rounded bg-surface-2 border border-border">
+                <div className="p-3 bg-cell-bg border border-hairline">
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="text-xs font-mono text-muted">CLASSROOM</div>
-                      <div className="text-base font-bold font-mono text-text mt-0.5">{selectedRoom.name}</div>
+                      <div className="text-[10px] text-muted uppercase">ROOM PROFILE</div>
+                      <div className="text-base font-bold text-cell-ink mt-0.5">{selectedRoom.name}</div>
                     </div>
-                    <span className="px-2 py-0.5 rounded bg-ink text-xs font-mono text-muted border border-border">
-                      {selectedRoom.building} · Floor {selectedRoom.floor ?? '—'}
+                    <span className="px-2 py-0.5 bg-board-case text-xs text-muted border border-hairline uppercase">
+                      {selectedRoom.building} | FLOOR {selectedRoom.floor ?? '—'}
                     </span>
                   </div>
 
                   {/* Right Now Status */}
-                  <div className="mt-2 pt-2 border-t border-border">
-                    <div className="text-[11px] font-mono text-muted uppercase">Period {currentPeriod}:</div>
+                  <div className="mt-2.5 pt-2 border-t border-hairline">
+                    <div className="text-[11px] text-muted uppercase">STATUS (PERIOD {currentPeriod}):</div>
                     {currentRoomClass ? (
-                      <div className="mt-1 font-mono text-xs">
-                        <span className="inline-block px-1.5 py-0.5 rounded bg-busy/40 text-text font-bold mr-1.5 border border-busy">
-                          Occupied
+                      <div className="mt-1 text-xs">
+                        <span className="inline-block px-1.5 py-0.5 bg-board-case text-unlit font-bold mr-1.5 border border-hairline uppercase">
+                          OCCUPIED
                         </span>
-                        <span className="font-semibold text-text">
+                        <span className="font-semibold text-cell-ink">
                           {currentRoomClass.batchNames.join(', ')}
                         </span>
                         <span className="text-muted">
-                          {' '}· {currentRoomClass.subjectCode || currentRoomClass.subjectName}
+                          {' '}[{currentRoomClass.subjectCode || currentRoomClass.subjectName}]
                         </span>
                       </div>
                     ) : (
-                      <div className="mt-1 font-mono text-xs text-free flex items-center gap-1.5 font-bold">
-                        <span className="w-2 h-2 rounded-full bg-free" />
-                        Vacant
+                      <div className="mt-1 text-xs text-signal flex items-center gap-1.5 font-bold uppercase">
+                        <span className="w-2 h-2 bg-signal shrink-0" aria-hidden="true" />
+                        VACANT NOW
                       </div>
                     )}
                   </div>
 
                   {/* Day breakdown */}
-                  <div className="mt-3 pt-2 border-t border-border">
-                    <div className="text-[11px] font-mono text-muted uppercase mb-1.5">Today&apos;s Schedule:</div>
+                  <div className="mt-3 pt-2 border-t border-hairline">
+                    <div className="text-[11px] text-muted uppercase mb-1.5">TODAY SCHEDULE:</div>
                     <div className="space-y-1">
                       {periods.map(p => {
                         const classInP = roomSchedule.find(occ => occ.period === p.index);
                         return (
                           <div
                             key={p.index}
-                            className={`flex items-center justify-between p-1.5 rounded font-mono text-xs ${
+                            className={`flex items-center justify-between p-1.5 text-xs border ${
                               p.index === currentPeriod
-                                ? 'bg-ink border border-border'
-                                : 'bg-surface/50'
+                                ? 'bg-board-case border-signal'
+                                : 'bg-page-bg border-hairline'
                             }`}
                           >
                             <span className="text-muted tabular-nums">
                               P{p.index} ({p.start}–{p.end})
                             </span>
                             {classInP ? (
-                              <span className="font-semibold text-text truncate max-w-[200px]">
+                              <span className="font-semibold text-cell-ink truncate max-w-[220px]">
                                 {classInP.batchNames.join(', ')} ({classInP.teacherNames[0] || 'Faculty'})
                               </span>
                             ) : (
-                              <span className="text-free font-bold text-[11px]">VACANT</span>
+                              <span className="text-signal font-bold text-[11px] uppercase">VACANT</span>
                             )}
                           </div>
                         );
@@ -326,3 +346,4 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     </div>
   );
 };
+

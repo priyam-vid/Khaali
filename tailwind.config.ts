@@ -10,26 +10,40 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: 'var(--ink)',
-        surface: 'var(--surface)',
-        'surface-2': 'var(--surface-2)',
-        border: 'var(--border)',
-        text: 'var(--text)',
+        'page-bg': 'var(--page-bg)',
+        'board-case': 'var(--board-case)',
+        'cell-bg': 'var(--cell-bg)',
+        'cell-ink': 'var(--cell-ink)',
         muted: 'var(--muted)',
-        free: 'var(--free)',
-        soon: 'var(--soon)',
-        busy: 'var(--busy)',
+        hairline: 'var(--hairline)',
+        signal: 'var(--signal)',
+        unlit: 'var(--unlit)',
         brand: 'var(--brand)',
+        // Compatibility aliases
+        ink: 'var(--page-bg)',
+        surface: 'var(--cell-bg)',
+        'surface-2': 'var(--board-case)',
+        border: 'var(--hairline)',
+        text: 'var(--cell-ink)',
+        free: 'var(--signal)',
+        soon: 'var(--signal)',
+        busy: 'var(--unlit)',
       },
       fontFamily: {
-        mono: ['var(--font-mono)', 'JetBrains Mono', 'IBM Plex Mono', 'monospace'],
-        sans: ['var(--font-sans)', 'Inter', 'Geist', 'system-ui', 'sans-serif'],
+        mono: ['var(--font-departure-mono)', 'Departure Mono', 'monospace'],
+        sans: ['var(--font-plex-sans)', 'IBM Plex Sans', 'system-ui', 'sans-serif'],
       },
       maxWidth: {
-        mobile: '440px',
+        mobile: '480px',
+        desktop: '1440px',
       },
       transitionDuration: {
         150: '150ms',
+        200: '200ms',
+      },
+      borderRadius: {
+        none: '0px',
+        sm: '2px',
       },
     },
   },
@@ -37,3 +51,4 @@ const config: Config = {
 };
 
 export default config;
+

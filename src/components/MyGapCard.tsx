@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { DayIndex, Period, Room, Occupancy } from '@/lib/domain/rooms';
+import { DayIndex, Period, Room } from '@/lib/domain/rooms';
 import { OccupancyStore } from '@/lib/domain/occupancy';
 import { evaluateVacancy } from '@/lib/domain/vacancy';
 
@@ -130,38 +130,39 @@ export const MyGapCard: React.FC<MyGapCardProps> = ({
   }, [allBatches, searchFilter]);
 
   return (
-    <div className="my-2.5 p-3 rounded-lg bg-surface border border-border">
+    <div className="my-2 p-3 bg-cell-bg border border-hairline">
       {/* Header: Batch Selector Bar */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5 font-mono text-xs text-muted">
-          <span>BATCH:</span>
+          <span className="w-1.5 h-1.5 bg-signal shrink-0" aria-hidden="true" />
+          <span className="uppercase tracking-wider">YOUR BATCH:</span>
           {selectedBatch ? (
-            <span className="font-bold text-text bg-surface-2 px-1.5 py-0.5 rounded border border-border">
+            <span className="font-bold text-cell-ink bg-board-case px-2 py-0.5 border border-hairline uppercase">
               {selectedBatch}
             </span>
           ) : (
-            <span className="text-muted italic">None selected</span>
+            <span className="text-muted italic">NONE CONFIGURED</span>
           )}
         </div>
 
         <button
           type="button"
           onClick={() => setIsEditing(prev => !prev)}
-          className="text-xs font-mono text-muted hover:text-text px-2 py-1 rounded bg-surface-2 border border-border transition-colors"
+          className="text-xs font-mono text-cell-ink hover:text-signal px-2 py-1 bg-board-case border border-hairline uppercase transition-colors"
         >
-          {isEditing ? 'Done' : selectedBatch ? 'Change' : 'Select Batch ▾'}
+          {isEditing ? '[DONE]' : selectedBatch ? '[CHANGE]' : '[SELECT BATCH]'}
         </button>
       </div>
 
       {/* Batch Autocomplete Dropdown */}
       {isEditing && (
-        <div className="mt-2.5 pt-2 border-t border-border">
+        <div className="mt-2.5 pt-2.5 border-t border-hairline">
           <input
             type="text"
-            placeholder="Type your batch (e.g. 2BCA1, 1CSE4)..."
+            placeholder="Type batch name (e.g. 2BCA1, 1CSE4)..."
             value={searchFilter}
             onChange={e => setSearchFilter(e.target.value)}
-            className="w-full px-2.5 py-1.5 rounded bg-ink border border-border font-mono text-xs text-text placeholder:text-muted focus:outline-none focus:border-brand"
+            className="w-full px-2.5 py-1.5 bg-page-bg border border-hairline font-mono text-xs text-cell-ink placeholder:text-muted focus:outline-none focus:border-signal"
             autoFocus
           />
           <div className="mt-1.5 max-h-36 overflow-y-auto flex flex-wrap gap-1">
@@ -170,10 +171,10 @@ export const MyGapCard: React.FC<MyGapCardProps> = ({
                 key={batch}
                 type="button"
                 onClick={() => handleSelectBatch(batch)}
-                className={`px-2 py-1 rounded font-mono text-xs border transition-colors ${
+                className={`px-2 py-1 font-mono text-xs border transition-colors ${
                   selectedBatch === batch
-                    ? 'bg-brand/20 border-brand text-text font-bold'
-                    : 'bg-surface-2 border-border text-muted hover:text-text'
+                    ? 'bg-board-case border-signal text-cell-ink font-bold'
+                    : 'bg-cell-bg border-hairline text-muted hover:text-cell-ink'
                 }`}
               >
                 {batch}
@@ -185,16 +186,17 @@ export const MyGapCard: React.FC<MyGapCardProps> = ({
 
       {/* Gap Analysis Output */}
       {selectedBatch && !isEditing && gapAnalysis && (
-        <div className="mt-2 pt-2 border-t border-border/60">
+        <div className="mt-2.5 pt-2 border-t border-hairline">
           {gapAnalysis.isFreeNow ? (
             <div>
-              <div className="font-mono text-sm font-semibold text-free flex items-center gap-1.5 tabular-nums">
-                <span>You&apos;re free {gapAnalysis.startTime}–{gapAnalysis.endTime}</span>
+              <div className="font-mono text-xs font-bold text-signal flex items-center gap-1.5 tabular-nums uppercase">
+                <span className="w-2 h-2 bg-signal shrink-0" aria-hidden="true" />
+                <span>FREE NOW: {gapAnalysis.startTime}–{gapAnalysis.endTime}</span>
               </div>
               {gapAnalysis.nearestRooms.length > 0 && (
-                <div className="text-xs font-mono text-muted mt-1">
-                  Nearest vacant:{' '}
-                  <span className="font-semibold text-text">
+                <div className="text-xs font-mono text-muted mt-1 flex items-center flex-wrap gap-1">
+                  <span>NEAREST VACANT:</span>
+                  <span className="font-bold text-cell-ink">
                     {gapAnalysis.nearestRooms.join(', ')}
                   </span>
                 </div>
@@ -203,26 +205,27 @@ export const MyGapCard: React.FC<MyGapCardProps> = ({
           ) : (
             <div>
               <div className="font-mono text-xs text-muted flex items-center gap-1.5 truncate">
-                <span>In class:</span>
-                <span className="font-semibold text-text truncate">
-                  {gapAnalysis.currentClass?.subjectCode || gapAnalysis.currentClass?.subjectName || 'Scheduled Lecture'}
+                <span className="w-2 h-2 bg-unlit shrink-0" aria-hidden="true" />
+                <span className="uppercase">IN CLASS:</span>
+                <span className="font-semibold text-cell-ink truncate">
+                  {gapAnalysis.currentClass?.subjectCode || gapAnalysis.currentClass?.subjectName || 'Scheduled Session'}
                 </span>
               </div>
               {gapAnalysis.nextGapStart ? (
                 <div className="text-xs font-mono mt-1 tabular-nums">
-                  <span className="text-muted">Next free: </span>
-                  <span className="text-soon font-semibold">
+                  <span className="text-muted uppercase">NEXT FREE: </span>
+                  <span className="text-signal font-bold">
                     {gapAnalysis.nextGapStart}–{gapAnalysis.nextGapEnd}
                   </span>
                   {gapAnalysis.nearestRooms.length > 0 && (
                     <span className="text-muted">
-                      {' '}· nearest: {gapAnalysis.nearestRooms.join(', ')}
+                      {' '}[NEAREST: {gapAnalysis.nearestRooms.join(', ')}]
                     </span>
                   )}
                 </div>
               ) : (
                 <div className="text-xs font-mono text-muted mt-1">
-                  In class through remainder of the day.
+                  In class through remainder of college day.
                 </div>
               )}
             </div>
@@ -232,3 +235,4 @@ export const MyGapCard: React.FC<MyGapCardProps> = ({
     </div>
   );
 };
+

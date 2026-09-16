@@ -7,17 +7,17 @@ interface DayTabsProps {
 }
 
 const DAYS: Array<{ index: DayIndex; label: string }> = [
-  { index: 0, label: 'Mon' },
-  { index: 1, label: 'Tue' },
-  { index: 2, label: 'Wed' },
-  { index: 3, label: 'Thu' },
-  { index: 4, label: 'Fri' },
-  { index: 5, label: 'Sat' },
+  { index: 0, label: 'MON' },
+  { index: 1, label: 'TUE' },
+  { index: 2, label: 'WED' },
+  { index: 3, label: 'THU' },
+  { index: 4, label: 'FRI' },
+  { index: 5, label: 'SAT' },
 ];
 
 export const DayTabs: React.FC<DayTabsProps> = ({ selectedDay, onSelectDay }) => {
   return (
-    <div className="flex items-center gap-1 overflow-x-auto pb-1" role="tablist" aria-label="Select day">
+    <div className="grid grid-cols-6 gap-1" role="tablist" aria-label="Select day">
       {DAYS.map(day => {
         const isSelected = selectedDay === day.index;
         return (
@@ -27,22 +27,17 @@ export const DayTabs: React.FC<DayTabsProps> = ({ selectedDay, onSelectDay }) =>
             type="button"
             aria-selected={isSelected}
             onClick={() => onSelectDay(day.index)}
-            className={`min-h-[44px] flex-1 px-3 py-2 rounded text-xs font-mono font-medium transition-colors duration-150 relative ${
+            className={`min-h-[44px] flex items-center justify-center px-2 py-2 text-xs font-mono font-bold transition-colors duration-150 border uppercase focus:outline-none focus-visible:ring-1 focus-visible:ring-signal ${
               isSelected
-                ? 'bg-surface-2 text-text font-bold'
-                : 'text-muted hover:text-text hover:bg-surface'
+                ? 'bg-board-case text-cell-ink border-signal border-b-2'
+                : 'bg-cell-bg text-muted border-hairline hover:text-cell-ink hover:bg-board-case/60'
             }`}
           >
             {day.label}
-            {isSelected && (
-              <span
-                className="absolute bottom-1 left-1/2 -translate-x-1/2 w-4 h-[2px] rounded-full bg-brand"
-                aria-hidden="true"
-              />
-            )}
           </button>
         );
       })}
     </div>
   );
 };
+

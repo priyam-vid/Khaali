@@ -2,38 +2,47 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --ink: #0E1014;
-  --surface: #171A21;
-  --surface-2: #1E222B;
-  --border: #252A34;
-  --text: #E9EBEF;
-  --muted: #8E97A6;
+@font-face {
+  font-family: 'Departure Mono';
+  src: url('/fonts/DepartureMono-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
 
-  --free: #3DDC97;
-  --soon: #F2B544;
-  --busy: #5A6374;
+:root {
+  /* Night Board (Default Dark) */
+  --page-bg: #0D0D0F;
+  --board-case: #17181B;
+  --cell-bg: #1E1F22;
+  --cell-ink: #EDE6D6;
+  --muted: #8A8D92;
+  --hairline: #2A2B2F;
+  --signal: #E8A33D;
+  --unlit: #4A4C52;
   --brand: #8C1D2F;
+
+  /* Font variables fallback */
+  --font-departure-mono: 'Departure Mono', monospace;
 }
 
 html.light {
-  --ink: #F7F8FA;
-  --surface: #FFFFFF;
-  --surface-2: #EDF0F5;
-  --border: #D4D9E2;
-  --text: #111418;
-  --muted: #586171;
-
-  --free: #0F8C58;
-  --soon: #B87600;
-  --busy: #767F90;
+  /* Day Board (Explicit Light) */
+  --page-bg: #E4E7E9;
+  --board-case: #CBCDCF;
+  --cell-bg: #F3F1E9;
+  --cell-ink: #23262B;
+  --muted: #6B6E73;
+  --hairline: #C7C9CB;
+  --signal: #B8760F;
+  --unlit: #C9C6BA;
   --brand: #8C1D2F;
 }
 
 body {
-  background-color: var(--ink);
-  color: var(--text);
-  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  background-color: var(--page-bg);
+  color: var(--cell-ink);
+  font-family: var(--font-plex-sans), 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -43,12 +52,43 @@ body {
 }
 
 .mono {
-  font-family: var(--font-mono), 'JetBrains Mono', 'IBM Plex Mono', monospace;
+  font-family: var(--font-departure-mono), 'Departure Mono', monospace;
+}
+
+/* Solari Mechanical Split-Flap Animation */
+@keyframes flap-flip {
+  0% {
+    transform: perspective(600px) rotateX(0deg);
+  }
+  49% {
+    transform: perspective(600px) rotateX(-90deg);
+  }
+  50% {
+    transform: perspective(600px) rotateX(90deg);
+  }
+  100% {
+    transform: perspective(600px) rotateX(0deg);
+  }
+}
+
+.flap-animate {
+  animation: flap-flip 180ms cubic-bezier(0.4, 0, 0.2, 1);
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+}
+
+/* Mechanical High-Contrast Focus Ring */
+*:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 1px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  * {
+  *,
+  .flap-animate {
     transition-duration: 0.001ms !important;
     animation-duration: 0.001ms !important;
+    animation: none !important;
   }
 }
+

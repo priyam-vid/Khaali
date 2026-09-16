@@ -14,7 +14,7 @@ export const PeriodPicker: React.FC<PeriodPickerProps> = ({
 }) => {
   return (
     <div
-      className="grid grid-cols-3 gap-1.5 pt-2 border-t border-border"
+      className="grid grid-cols-4 gap-1 pt-2 border-t border-hairline"
       role="radiogroup"
       aria-label="Select period"
     >
@@ -27,27 +27,22 @@ export const PeriodPicker: React.FC<PeriodPickerProps> = ({
             role="radio"
             aria-checked={isSelected}
             onClick={() => onSelectPeriod(p.index)}
-            className={`min-h-[44px] flex flex-col items-center justify-center p-1.5 rounded border text-left transition-colors duration-150 relative ${
+            className={`min-h-[44px] flex flex-col items-center justify-center p-1.5 border text-center transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-signal ${
               isSelected
-                ? 'bg-surface-2 border-brand text-text font-bold shadow-sm'
-                : 'bg-surface border-border text-muted hover:text-text hover:bg-surface-2'
+                ? 'bg-board-case border-signal border-b-2 text-cell-ink font-bold'
+                : 'bg-cell-bg border-hairline text-muted hover:text-cell-ink hover:bg-board-case/60'
             }`}
           >
-            <div className="flex items-center gap-1">
-              <span className="font-mono text-xs font-bold text-text">P{p.index}</span>
+            <div className="font-mono text-xs font-bold text-cell-ink">
+              P{p.index}
             </div>
-            <div className="text-[10px] font-mono tabular-nums text-muted leading-tight">
-              {p.start}–{p.end}
+            <div className="text-[10px] font-mono tabular-nums text-muted leading-tight mt-0.5">
+              {p.start}
             </div>
-            {isSelected && (
-              <span
-                className="absolute bottom-1 w-4 h-[2px] rounded-full bg-brand"
-                aria-hidden="true"
-              />
-            )}
           </button>
         );
       })}
     </div>
   );
 };
+

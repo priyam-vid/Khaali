@@ -70,7 +70,7 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
-  // Theme state: dark default, supports light theme toggle & prefers-color-scheme
+  // Theme state: dark default, supports manual toggle & prefers-color-scheme
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
 
   // Register PWA Service Worker in production
@@ -92,19 +92,22 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
         setTheme('light');
         document.documentElement.classList.add('light');
         document.documentElement.classList.remove('dark');
+      } else {
+        setTheme('dark');
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light');
       }
     } catch {
       // Ignore
     }
   }, []);
 
-  const toggleTheme = () => {
-    const nextTheme = theme === 'dark' ? 'light' : 'dark';
-    setTheme(nextTheme);
-    document.documentElement.classList.toggle('light', nextTheme === 'light');
-    document.documentElement.classList.toggle('dark', nextTheme === 'dark');
+  const setThemeMode = (newTheme: 'dark' | 'light') => {
+    setTheme(newTheme);
+    document.documentElement.classList.toggle('light', newTheme === 'light');
+    document.documentElement.classList.toggle('dark', newTheme === 'dark');
     try {
-      localStorage.setItem('khaali_theme', nextTheme);
+      localStorage.setItem('khaali_theme', newTheme);
     } catch {
       // Ignore
     }
@@ -303,6 +306,42 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
     setSelectedPeriod(periodIndex);
   };
 
+  // Global Keyboard Navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+        return;
+      }
+
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        setIsManualTime(true);
+        setSelectedDay(prev => ((prev + 5) % 6) as DayIndex);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        setIsManualTime(true);
+        setSelectedDay(prev => ((prev + 1) % 6) as DayIndex);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setIsManualTime(true);
+        setSelectedPeriod(prev => Math.max(1, prev - 1));
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setIsManualTime(true);
+        setSelectedPeriod(prev => Math.min(periods.length, prev + 1));
+      } else if (e.key === '/') {
+        e.preventDefault();
+        setIsSearchOpen(true);
+      } else if (e.key === 'Escape') {
+        setIsSearchOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [periods.length]);
+
   // Share deep link helper
   const handleShareLink = useCallback(() => {
     if (typeof window === 'undefined') return;
@@ -363,11 +402,32 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
     return evaluation.neverScheduledRooms.filter(r => r.building === selectedBuilding);
   }, [evaluation.neverScheduledRooms, selectedBuilding]);
 
-  // Hero room: first of filtered results, or global hero if 'ALL'
+  // Prior and next class lookup helper for desktop hover inspection
+  const getRoomPriorAndNext = useCallback(
+    (roomId: string, endPeriod: number) => {
+      const todayClasses = effectiveOccupancies
+        .filter(occ => occ.day === selectedDay && occ.roomId === roomId)
+        .sort((a, b) => a.period - b.period);
+
+      const prevClass = todayClasses.filter(c => c.period < selectedPeriod).pop() || null;
+      const nextClass = todayClasses.find(c => c.period > endPeriod) || null;
+
+      return { prevClass, nextClass };
+    },
+    [effectiveOccupancies, selectedDay, selectedPeriod]
+  );
+
+  // Hero room: first of filtered results
   const heroRoom: ExtendedFreeRun | null = useMemo(() => {
     if (filteredRuns.length === 0) return null;
     return filteredRuns[0];
   }, [filteredRuns]);
+
+  // Hero room prior/next schedule
+  const heroSchedule = useMemo(() => {
+    if (!heroRoom) return { prevClass: null, nextClass: null };
+    return getRoomPriorAndNext(heroRoom.roomId, heroRoom.endPeriod);
+  }, [heroRoom, getRoomPriorAndNext]);
 
   // Rooms list excluding the hero answer
   const remainingRooms = useMemo(() => {
@@ -380,198 +440,300 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
   const isAfterHours = detection.state === 'AFTER_HOURS' && isLive;
 
   return (
-    <div className="min-h-screen flex flex-col justify-between max-w-mobile mx-auto px-3.5 pt-3 pb-0 bg-ink">
-      <div>
-        {/* Departure Board Top Bar: Wordmark + Controls + Live IST Clock */}
-        <header className="flex items-center justify-between pb-3 border-b border-border">
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-xl font-black tracking-wider text-text">
-              KHAALI
-            </span>
-            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-brand/30 border border-brand/60 text-text uppercase">
-              SoCSE
-            </span>
-          </div>
+    <div className="min-h-screen bg-page-bg text-cell-ink selection:bg-brand selection:text-white flex flex-col justify-between">
+      {/* Top Outer Shell */}
+      <div className="max-w-desktop w-full mx-auto p-3 sm:p-5 lg:p-6">
+        {/* Responsive Layout: Desktop 2-Column Grid / Mobile Single Column */}
+        <div className="flex flex-col lg:flex-row gap-5 lg:gap-8 items-start">
+          {/* ========================================================================= */}
+          {/* LEFT RAIL (Desktop persistent sidebar / Mobile header strip) */}
+          {/* ========================================================================= */}
+          <aside className="w-full lg:w-80 lg:shrink-0 space-y-3.5">
+            {/* Header / Brand & Clock Casing */}
+            <div className="border border-hairline bg-cell-bg p-3.5 sm:p-4">
+              <div className="flex items-center justify-between pb-3 border-b border-hairline">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xl sm:text-2xl font-black tracking-wider text-cell-ink">
+                    KHAALI
+                  </span>
+                  <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 bg-brand text-white border border-brand uppercase">
+                    SoCSE
+                  </span>
+                </div>
 
-          <div className="flex items-center gap-1 font-mono text-xs text-muted tabular-nums">
-            {/* Search & Lookup Button */}
-            <button
-              type="button"
-              onClick={() => setIsSearchOpen(true)}
-              aria-label="Search faculty or room schedules"
-              title="Search faculty or room schedules"
-              className="min-h-[44px] min-w-[36px] flex items-center justify-center p-1.5 rounded hover:bg-surface-2 text-muted hover:text-text transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <circle cx="11" cy="11" r="7" strokeWidth="2" />
-                <path strokeWidth="2" d="M21 21l-4.35-4.35" />
-              </svg>
-            </button>
-
-            {/* Share Deep Link Button */}
-            <button
-              type="button"
-              onClick={handleShareLink}
-              aria-label="Share current view deep link"
-              title="Share current view deep-link"
-              className="min-h-[44px] min-w-[36px] flex items-center justify-center p-1.5 rounded hover:bg-surface-2 text-muted hover:text-text transition-colors relative"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeWidth="2" d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13" />
-              </svg>
-              {copiedLink && (
-                <span className="absolute -bottom-6 right-0 text-[10px] bg-brand text-white px-1.5 py-0.5 rounded shadow whitespace-nowrap">
-                  Link copied!
-                </span>
-              )}
-            </button>
-
-            {/* Theme Toggle Button */}
-            <button
-              type="button"
-              onClick={toggleTheme}
-              aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-              title={theme === 'dark' ? 'Light Theme' : 'Dark Theme'}
-              className="min-h-[44px] min-w-[36px] flex items-center justify-center p-1.5 rounded hover:bg-surface-2 text-muted hover:text-text transition-colors"
-            >
-              {theme === 'dark' ? (
-                // Sun Icon
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <circle cx="12" cy="12" r="5" strokeWidth="2" />
-                  <path strokeWidth="2" d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
-                </svg>
-              ) : (
-                // Moon Icon
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeWidth="2" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-                </svg>
-              )}
-            </button>
-
-            <span className="text-border mx-0.5">|</span>
-            <span>{istInfo.weekdayShort}</span>
-            <span className="text-border">·</span>
-            <span className="font-semibold text-text">{istInfo.timeString}</span>
-          </div>
-        </header>
-
-        {/* Status Warnings & Stale Data Banner */}
-        <StatusBanner
-          isStale={isStaleData}
-          staleTime={new Date(fetchedAt).toLocaleTimeString('en-US', {
-            hour: '2-digit',
-            minute: '2-digit',
-            timeZone: 'Asia/Kolkata',
-          })}
-          isOutsideValidityWindow={isOutsideValidity}
-          validityWindow={validityWindow}
-        />
-
-        {/* "Your Next Gap" Personalized Card */}
-        <MyGapCard
-          day={selectedDay}
-          currentPeriodIndex={selectedPeriod}
-          periods={periods}
-          rooms={rooms}
-          occupancyStore={occupancyStore}
-          allBatches={allBatches}
-        />
-
-        {/* Collapsed/Expandable Day & Period Selector Bar */}
-        <TimeSelectorBar
-          periods={periods}
-          selectedDay={selectedDay}
-          selectedPeriod={selectedPeriod}
-          onSelectDay={handleSelectDay}
-          onSelectPeriod={handleSelectPeriod}
-          isLive={isLive}
-          onResetToLive={handleResetToLive}
-        />
-
-        {/* Single Best Answer (HERO) */}
-        <HeroAnswer
-          hero={heroRoom}
-          noClassesToday={evaluation.noClassesToday}
-          isAfterHours={isAfterHours}
-          isBeforeHours={isBeforeHours}
-          isSunday={isSunday}
-        />
-
-        {/* Scannable Room Rows List */}
-        {!evaluation.noClassesToday && remainingRooms.length > 0 && (
-          <section className="my-4" aria-label="Available classrooms">
-            <div className="flex items-center justify-between text-xs font-mono text-muted mb-2 px-1">
-              <span>
-                {remainingRooms.length} more {remainingRooms.length === 1 ? 'room' : 'rooms'} free now
-              </span>
-              <span className="text-[11px] uppercase tracking-wider">
-                Ranked by duration
-              </span>
-            </div>
-
-            <ul className="space-y-1.5" role="list">
-              {remainingRooms.map(run => (
-                <RoomRow key={run.roomId} run={run} />
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {/* Never Scheduled Collapsible Section */}
-        {filteredNeverScheduled.length > 0 && (
-          <section className="my-4 border border-border rounded bg-surface/50 overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setNeverScheduledOpen(prev => !prev)}
-              aria-expanded={neverScheduledOpen}
-              className="min-h-[44px] w-full flex items-center justify-between px-3 py-2 text-xs font-mono text-muted hover:text-text transition-colors"
-            >
-              <div className="flex items-center gap-1.5">
-                <span>{neverScheduledOpen ? '▾' : '▸'}</span>
-                <span>Never scheduled — may not be usable ({filteredNeverScheduled.length})</span>
-              </div>
-              <span className="text-[10px] uppercase">
-                {neverScheduledOpen ? 'Hide' : 'Show'}
-              </span>
-            </button>
-
-            {neverScheduledOpen && (
-              <div className="p-3 pt-0 border-t border-border/50 bg-ink/30">
-                <p className="text-[11px] text-muted mb-2 font-mono">
-                  These rooms have zero scheduled cards across the entire week (often staff rooms, store rooms, or locked halls).
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {filteredNeverScheduled.map(room => (
-                    <span
-                      key={room.id}
-                      className="px-2 py-1 rounded bg-surface border border-border text-xs font-mono text-muted"
-                    >
-                      {room.name} ({room.building})
-                    </span>
-                  ))}
+                {/* Explicit DAY / NIGHT Theme Switch */}
+                <div className="flex items-center border border-hairline bg-page-bg font-mono text-xs">
+                  <button
+                    type="button"
+                    aria-pressed={theme === 'dark'}
+                    onClick={() => setThemeMode('dark')}
+                    className={`px-2.5 py-1 font-bold uppercase transition-colors ${
+                      theme === 'dark'
+                        ? 'bg-board-case text-signal border-b-2 border-signal'
+                        : 'text-muted hover:text-cell-ink'
+                    }`}
+                  >
+                    NIGHT
+                  </button>
+                  <span className="w-px h-3.5 bg-hairline shrink-0" aria-hidden="true" />
+                  <button
+                    type="button"
+                    aria-pressed={theme === 'light'}
+                    onClick={() => setThemeMode('light')}
+                    className={`px-2.5 py-1 font-bold uppercase transition-colors ${
+                      theme === 'light'
+                        ? 'bg-board-case text-signal border-b-2 border-signal'
+                        : 'text-muted hover:text-cell-ink'
+                    }`}
+                  >
+                    DAY
+                  </button>
                 </div>
               </div>
+
+              {/* Solari Mechanical Clock */}
+              <div className="pt-3 flex items-center justify-between font-mono">
+                <div>
+                  <div className="text-[10px] text-muted uppercase">CAMPUS TIME (IST)</div>
+                  <div className="text-2xl font-bold tracking-tight text-cell-ink tabular-nums">
+                    {istInfo.timeString}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[10px] text-muted uppercase">DAY</div>
+                  <div className="text-sm font-bold text-cell-ink uppercase">
+                    {istInfo.weekdayShort}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Action Controls (Search & Share) */}
+            <div className="grid grid-cols-2 gap-2 font-mono text-xs">
+              <button
+                type="button"
+                onClick={() => setIsSearchOpen(true)}
+                aria-label="Search faculty or room schedules"
+                className="min-h-[42px] flex items-center justify-center gap-1.5 px-3 py-2 bg-cell-bg border border-hairline hover:bg-board-case/70 text-cell-ink font-bold uppercase transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-signal"
+              >
+                <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <circle cx="11" cy="11" r="7" strokeWidth="2" />
+                  <path strokeWidth="2" d="M21 21l-4.35-4.35" />
+                </svg>
+                <span>SEARCH [/]</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleShareLink}
+                aria-label="Share current view deep link"
+                className="min-h-[42px] flex items-center justify-center gap-1.5 px-3 py-2 bg-cell-bg border border-hairline hover:bg-board-case/70 text-cell-ink font-bold uppercase transition-colors relative focus:outline-none focus-visible:ring-1 focus-visible:ring-signal"
+              >
+                <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeWidth="2" d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13" />
+                </svg>
+                <span>{copiedLink ? 'COPIED!' : 'SHARE LINK'}</span>
+              </button>
+            </div>
+
+            {/* Desktop Vertical Filter List (Hidden on Mobile) */}
+            <div className="hidden lg:block border border-hairline bg-cell-bg p-3">
+              <FilterChips
+                selected={selectedBuilding}
+                onChange={setSelectedBuilding}
+                counts={buildingCounts}
+                orientation="vertical"
+              />
+            </div>
+
+            {/* Personalized My Gap Timetable Flap */}
+            <MyGapCard
+              day={selectedDay}
+              currentPeriodIndex={selectedPeriod}
+              periods={periods}
+              rooms={rooms}
+              occupancyStore={occupancyStore}
+              allBatches={allBatches}
+            />
+
+            {/* Keyboard Shortcuts Guide (Desktop only) */}
+            <div className="hidden lg:block border border-hairline bg-cell-bg p-3 font-mono text-[11px] text-muted">
+              <div className="uppercase tracking-wider font-bold text-cell-ink mb-1.5 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 bg-signal shrink-0" aria-hidden="true" />
+                <span>KEYBOARD COMMANDS</span>
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span>Cycle Day</span>
+                  <span className="px-1 py-0.5 bg-board-case border border-hairline text-cell-ink">← / →</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Cycle Period</span>
+                  <span className="px-1 py-0.5 bg-board-case border border-hairline text-cell-ink">↑ / ↓</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Search Faculty/Room</span>
+                  <span className="px-1 py-0.5 bg-board-case border border-hairline text-cell-ink">/</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Dismiss Dialog</span>
+                  <span className="px-1 py-0.5 bg-board-case border border-hairline text-cell-ink">ESC</span>
+                </div>
+              </div>
+            </div>
+          </aside>
+
+          {/* ========================================================================= */}
+          {/* RIGHT MAIN PANE (The Solari Departure Board) */}
+          {/* ========================================================================= */}
+          <main className="flex-1 min-w-0 w-full">
+            {/* Split-Flap Board Housing Frame */}
+            <div className="border border-hairline bg-board-case p-3 sm:p-4 mb-3">
+              {/* Board Header Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-hairline font-mono">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 bg-signal shrink-0" aria-hidden="true" />
+                  <span className="text-xs sm:text-sm font-bold uppercase tracking-wider text-cell-ink">
+                    SOLARI DEPARTURE BOARD // CLASSROOM VACANCY
+                  </span>
+                </div>
+                <div className="text-xs text-muted tabular-nums uppercase">
+                  {filteredRuns.length} VACANT {filteredRuns.length === 1 ? 'ROOM' : 'ROOMS'} LISTED
+                </div>
+              </div>
+
+              {/* Period & Day Selector Controls */}
+              <TimeSelectorBar
+                periods={periods}
+                selectedDay={selectedDay}
+                selectedPeriod={selectedPeriod}
+                onSelectDay={handleSelectDay}
+                onSelectPeriod={handleSelectPeriod}
+                isLive={isLive}
+                onResetToLive={handleResetToLive}
+              />
+            </div>
+
+            {/* Status & Validity Warnings */}
+            <StatusBanner
+              isStale={isStaleData}
+              staleTime={new Date(fetchedAt).toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                timeZone: 'Asia/Kolkata',
+              })}
+              isOutsideValidityWindow={isOutsideValidity}
+              validityWindow={validityWindow}
+            />
+
+            {/* Row 1 / Best Pick Hero Integration */}
+            <HeroAnswer
+              hero={heroRoom}
+              noClassesToday={evaluation.noClassesToday}
+              isAfterHours={isAfterHours}
+              isBeforeHours={isBeforeHours}
+              isSunday={isSunday}
+              prevClass={heroSchedule.prevClass}
+              nextClass={heroSchedule.nextClass}
+              periods={periods}
+            />
+
+            {/* Multi-Column Departure Board Grid */}
+            {!evaluation.noClassesToday && remainingRooms.length > 0 && (
+              <section className="my-3" aria-label="Remaining vacant classrooms">
+                <div className="flex items-center justify-between text-xs font-mono text-muted mb-2 px-0.5">
+                  <span className="uppercase tracking-wider">
+                    {remainingRooms.length} ADDITIONAL VACANCIES // SORTED BY DURATION
+                  </span>
+                  <span className="text-[11px] uppercase tracking-wider hidden sm:inline">
+                    DESKTOP: HOVER ROW TO INSPECT SCHEDULE
+                  </span>
+                </div>
+
+                <ul
+                  key={`${selectedDay}-${selectedPeriod}-${selectedBuilding}`}
+                  className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-2 flap-animate"
+                  role="list"
+                >
+                  {remainingRooms.map((run, idx) => {
+                    const schedule = getRoomPriorAndNext(run.roomId, run.endPeriod);
+                    return (
+                      <RoomRow
+                        key={run.roomId}
+                        run={run}
+                        rank={idx + 2}
+                        prevClass={schedule.prevClass}
+                        nextClass={schedule.nextClass}
+                        periods={periods}
+                      />
+                    );
+                  })}
+                </ul>
+              </section>
             )}
-          </section>
-        )}
+
+            {/* Never Scheduled Rooms Section (Mechanical Drawer) */}
+            {filteredNeverScheduled.length > 0 && (
+              <section className="my-4 border border-hairline bg-cell-bg">
+                <button
+                  type="button"
+                  onClick={() => setNeverScheduledOpen(prev => !prev)}
+                  aria-expanded={neverScheduledOpen}
+                  className="min-h-[44px] w-full flex items-center justify-between px-3 py-2 text-xs font-mono text-cell-ink hover:text-signal transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-signal"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 bg-unlit shrink-0" aria-hidden="true" />
+                    <span className="uppercase">
+                      NEVER SCHEDULED ROOMS // SPECIAL / LOCKED ({filteredNeverScheduled.length})
+                    </span>
+                  </div>
+                  <span className="text-[11px] font-mono uppercase px-1.5 py-0.5 border border-hairline bg-board-case">
+                    {neverScheduledOpen ? '[-] HIDE' : '[+] SHOW'}
+                  </span>
+                </button>
+
+                {neverScheduledOpen && (
+                  <div className="p-3 pt-2 border-t border-hairline bg-board-case/40">
+                    <p className="text-[11px] text-muted mb-2.5 font-mono">
+                      These classrooms have zero scheduled sessions across the entire timetable week. They may be departmental labs, conference rooms, or locked.
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {filteredNeverScheduled.map(room => (
+                        <span
+                          key={room.id}
+                          className="px-2 py-1 bg-cell-bg border border-hairline text-xs font-mono text-muted uppercase"
+                        >
+                          {room.name} [{room.building}]
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </section>
+            )}
+          </main>
+        </div>
       </div>
 
-      {/* Sticky Bottom Filter Chips & Unofficial Tool Footer */}
-      <div>
+      {/* Mobile/Tablet Bottom Sticky Filter Bar (Hidden on Desktop ≥1024px) */}
+      <div className="lg:hidden mt-auto">
         <FilterChips
           selected={selectedBuilding}
           onChange={setSelectedBuilding}
           counts={buildingCounts}
+          orientation="horizontal"
         />
-
-        <footer className="py-3 text-center border-t border-border/50 mt-2">
-          <p className="text-[11px] font-mono text-muted">
-            Khaali — unofficial. Data from the SoCSE timetable. Verify before you rely on it.
-          </p>
-        </footer>
       </div>
 
-      {/* Search Modal for Faculty Lookup & Room Schedules */}
+      {/* Mechanical Board Footer */}
+      <footer className="border-t border-hairline py-3 px-4 text-center font-mono text-[11px] text-muted bg-page-bg">
+        <div className="max-w-desktop mx-auto flex flex-col sm:flex-row items-center justify-between gap-1">
+          <span>Khaali — School of Computer Science & Engineering, IILM University Greater Noida.</span>
+          <span>Unofficial board. Always verify with department notice boards.</span>
+        </div>
+      </footer>
+
+      {/* Faculty & Room Search / Inquiry Dialog */}
       <SearchModal
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
@@ -579,9 +741,10 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
         currentPeriod={selectedPeriod}
         periods={periods}
         rooms={rooms}
-        occupancies={occupancies}
+        occupancies={effectiveOccupancies}
         allProfessors={allProfessors}
       />
     </div>
   );
 }
+
