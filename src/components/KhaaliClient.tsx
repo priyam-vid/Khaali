@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Period, Room, Occupancy, DayIndex, Building } from '@/lib/domain/rooms';
+import { Period, Room, Occupancy, DayIndex } from '@/lib/domain/rooms';
 import { createOccupancyStore } from '@/lib/domain/occupancy';
 import { evaluateVacancy, ExtendedFreeRun } from '@/lib/domain/vacancy';
 import { detectCurrentPeriod, getISTTimeInfo } from '@/lib/domain/time';
@@ -69,6 +69,46 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
   const [substitutions, setSubstitutions] = useState<SubstitutionChange[]>([]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+
+  // Theme state: dark default, supports light theme toggle & prefers-color-scheme
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+
+  // Register PWA Service Worker in production
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+  }, []);
+
+  // Theme Initialization & Sync
+  useEffect(() => {
+    try {
+      const savedTheme = localStorage.getItem('khaali_theme') as 'dark' | 'light' | null;
+      if (savedTheme) {
+        setTheme(savedTheme);
+        document.documentElement.classList.toggle('light', savedTheme === 'light');
+        document.documentElement.classList.toggle('dark', savedTheme === 'dark');
+      } else if (window.matchMedia('(prefers-color-scheme: light)').matches) {
+        setTheme('light');
+        document.documentElement.classList.add('light');
+        document.documentElement.classList.remove('dark');
+      }
+    } catch {
+      // Ignore
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(nextTheme);
+    document.documentElement.classList.toggle('light', nextTheme === 'light');
+    document.documentElement.classList.toggle('dark', nextTheme === 'dark');
+    try {
+      localStorage.setItem('khaali_theme', nextTheme);
+    } catch {
+      // Ignore
+    }
+  };
 
   // Cache initial payload to localStorage for offline campus Wi-Fi resiliency
   useEffect(() => {
@@ -353,13 +393,14 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
             </span>
           </div>
 
-          <div className="flex items-center gap-1.5 font-mono text-xs text-muted tabular-nums">
+          <div className="flex items-center gap-1 font-mono text-xs text-muted tabular-nums">
             {/* Search & Lookup Button */}
             <button
               type="button"
               onClick={() => setIsSearchOpen(true)}
+              aria-label="Search faculty or room schedules"
               title="Search faculty or room schedules"
-              className="p-1.5 rounded hover:bg-surface-2 text-muted hover:text-text transition-colors"
+              className="min-h-[44px] min-w-[36px] flex items-center justify-center p-1.5 rounded hover:bg-surface-2 text-muted hover:text-text transition-colors"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <circle cx="11" cy="11" r="7" strokeWidth="2" />
@@ -371,24 +412,46 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
             <button
               type="button"
               onClick={handleShareLink}
+              aria-label="Share current view deep link"
               title="Share current view deep-link"
-              className="p-1.5 rounded hover:bg-surface-2 text-muted hover:text-text transition-colors relative"
+              className="min-h-[44px] min-w-[36px] flex items-center justify-center p-1.5 rounded hover:bg-surface-2 text-muted hover:text-text transition-colors relative"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeWidth="2" d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13" />
               </svg>
               {copiedLink && (
-                <span className="absolute -bottom-6 right-0 text-[10px] bg-brand text-white px-1.5 py-0.5 rounded shadow">
-                  Copied!
+                <span className="absolute -bottom-6 right-0 text-[10px] bg-brand text-white px-1.5 py-0.5 rounded shadow whitespace-nowrap">
+                  Link copied!
                 </span>
               )}
             </button>
 
-            <span className="text-border">|</span>
+            {/* Theme Toggle Button */}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+              title={theme === 'dark' ? 'Light Theme' : 'Dark Theme'}
+              className="min-h-[44px] min-w-[36px] flex items-center justify-center p-1.5 rounded hover:bg-surface-2 text-muted hover:text-text transition-colors"
+            >
+              {theme === 'dark' ? (
+                // Sun Icon
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="5" strokeWidth="2" />
+                  <path strokeWidth="2" d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+                </svg>
+              ) : (
+                // Moon Icon
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeWidth="2" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                </svg>
+              )}
+            </button>
+
+            <span className="text-border mx-0.5">|</span>
             <span>{istInfo.weekdayShort}</span>
             <span className="text-border">·</span>
             <span className="font-semibold text-text">{istInfo.timeString}</span>
-            <span className="text-[10px] text-muted">IST</span>
           </div>
         </header>
 

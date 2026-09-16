@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="96" fill="#0E1014" />
+  <rect x="32" y="32" width="448" height="448" rx="80" fill="#171A21" stroke="#252A34" stroke-width="8" />
+  <!-- Brand Accent Top Bar -->
+  <rect x="64" y="64" width="384" height="12" rx="6" fill="#8C1D2F" />
+  <!-- Monospace Departure Board K -->
+  <text x="256" y="330" text-anchor="middle" font-family="monospace, 'JetBrains Mono', 'Courier New'" font-size="280" font-weight="900" fill="#3DDC97">K</text>
+  <!-- Free Dot Indicator -->
+  <circle cx="390" cy="380" r="28" fill="#3DDC97" />
+</svg>
