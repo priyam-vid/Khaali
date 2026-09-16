@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { Period, Room, Occupancy, DayIndex } from '@/lib/domain/rooms';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Period, Room, Occupancy, DayIndex, Building } from '@/lib/domain/rooms';
 import { createOccupancyStore } from '@/lib/domain/occupancy';
 import { evaluateVacancy, ExtendedFreeRun } from '@/lib/domain/vacancy';
 import { detectCurrentPeriod, getISTTimeInfo } from '@/lib/domain/time';
@@ -11,6 +11,8 @@ import { RoomRow } from './RoomRow';
 import { FilterChips, FilterBuilding } from './FilterChips';
 import { TimeSelectorBar } from './TimeSelectorBar';
 import { StatusBanner } from './StatusBanner';
+import { MyGapCard } from './MyGapCard';
+import { SearchModal } from './SearchModal';
 
 export interface KhaaliInitialData {
   periods: Period[];
@@ -27,6 +29,17 @@ export interface KhaaliInitialData {
 interface KhaaliClientProps {
   initialData: KhaaliInitialData;
 }
+
+const DAY_MAP: Record<string, DayIndex> = {
+  mon: 0,
+  tue: 1,
+  wed: 2,
+  thu: 3,
+  fri: 4,
+  sat: 5,
+};
+
+const DAY_CODES = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 
 function parseDateFromDDMMYYYY(dateStr: string): Date | null {
   const parts = dateStr.split('/');
@@ -54,6 +67,8 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
   const [data, setData] = useState<KhaaliInitialData>(initialData);
   const [isStaleData, setIsStaleData] = useState<boolean>(initialData.fromFallback);
   const [substitutions, setSubstitutions] = useState<SubstitutionChange[]>([]);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   // Cache initial payload to localStorage for offline campus Wi-Fi resiliency
   useEffect(() => {
@@ -119,6 +134,27 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
   // Occupancy store with O(1) indexed lookups
   const occupancyStore = useMemo(() => createOccupancyStore(effectiveOccupancies), [effectiveOccupancies]);
 
+  // Derive unique batches & teachers for search and gap tracking
+  const allBatches = useMemo(() => {
+    const set = new Set<string>();
+    for (const occ of occupancies) {
+      for (const b of occ.batchNames) {
+        if (b) set.add(b);
+      }
+    }
+    return Array.from(set).sort();
+  }, [occupancies]);
+
+  const allProfessors = useMemo(() => {
+    const set = new Set<string>();
+    for (const occ of occupancies) {
+      for (const t of occ.teacherNames) {
+        if (t) set.add(t);
+      }
+    }
+    return Array.from(set).sort();
+  }, [occupancies]);
+
   // Current system / IST state
   const [now, setNow] = useState<Date>(() => new Date());
   const istInfo = useMemo(() => getISTTimeInfo(now), [now]);
@@ -129,18 +165,45 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
     return checkOutsideValidityWindow(now, validityWindow);
   }, [now, validityWindow]);
 
-  // Selected Day & Period states
-  const [selectedDay, setSelectedDay] = useState<DayIndex>(() => {
-    return detection.dayIndex ?? 0;
-  });
-
-  const [selectedPeriod, setSelectedPeriod] = useState<number>(() => {
-    return detection.activePeriodIndex;
-  });
-
-  const [isManualTime, setIsManualTime] = useState(false);
+  // Selected Day, Period, and Building states
+  const [selectedDay, setSelectedDay] = useState<DayIndex>(() => detection.dayIndex ?? 0);
+  const [selectedPeriod, setSelectedPeriod] = useState<number>(() => detection.activePeriodIndex);
   const [selectedBuilding, setSelectedBuilding] = useState<FilterBuilding>('ALL');
+  const [isManualTime, setIsManualTime] = useState(false);
   const [neverScheduledOpen, setNeverScheduledOpen] = useState(false);
+
+  // Deep Link Query Parameter Parsing on Client Mount
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const params = new URLSearchParams(window.location.search);
+    const dayParam = params.get('day')?.toLowerCase();
+    const periodParam = params.get('period');
+    const buildingParam = params.get('building')?.toUpperCase();
+
+    let manual = false;
+
+    if (dayParam && dayParam in DAY_MAP) {
+      setSelectedDay(DAY_MAP[dayParam]);
+      manual = true;
+    }
+
+    if (periodParam) {
+      const pNum = parseInt(periodParam, 10);
+      if (pNum >= 1 && pNum <= periods.length) {
+        setSelectedPeriod(pNum);
+        manual = true;
+      }
+    }
+
+    if (buildingParam && ['ALL', 'EB', 'FB', 'SVH', 'LAW'].includes(buildingParam)) {
+      setSelectedBuilding(buildingParam as FilterBuilding);
+    }
+
+    if (manual) {
+      setIsManualTime(true);
+    }
+  }, [periods.length]);
 
   // Live IST Clock ticking (every 1 second)
   useEffect(() => {
@@ -167,7 +230,7 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
     return () => clearInterval(reEvalTimer);
   }, [periods, isManualTime]);
 
-  // Auto-sync initial detection once client mounts
+  // Auto-sync initial detection once client mounts if no deep link was provided
   useEffect(() => {
     if (!isManualTime) {
       if (detection.dayIndex !== null) {
@@ -199,6 +262,21 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
     setIsManualTime(true);
     setSelectedPeriod(periodIndex);
   };
+
+  // Share deep link helper
+  const handleShareLink = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const dayCode = DAY_CODES[selectedDay] || 'mon';
+    const buildingCode = selectedBuilding;
+    const url = `${window.location.origin}/?day=${dayCode}&period=${selectedPeriod}&building=${buildingCode}`;
+
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(url).then(() => {
+        setCopiedLink(true);
+        setTimeout(() => setCopiedLink(false), 2000);
+      });
+    }
+  }, [selectedDay, selectedPeriod, selectedBuilding]);
 
   // Evaluate vacancy for selected day & period
   const evaluation = useMemo(() => {
@@ -264,7 +342,7 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
   return (
     <div className="min-h-screen flex flex-col justify-between max-w-mobile mx-auto px-3.5 pt-3 pb-0 bg-ink">
       <div>
-        {/* Departure Board Top Bar: Wordmark + Live IST Clock */}
+        {/* Departure Board Top Bar: Wordmark + Controls + Live IST Clock */}
         <header className="flex items-center justify-between pb-3 border-b border-border">
           <div className="flex items-center gap-2">
             <span className="font-mono text-xl font-black tracking-wider text-text">
@@ -275,7 +353,38 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
             </span>
           </div>
 
-          <div className="flex items-center gap-2 font-mono text-xs text-muted tabular-nums">
+          <div className="flex items-center gap-1.5 font-mono text-xs text-muted tabular-nums">
+            {/* Search & Lookup Button */}
+            <button
+              type="button"
+              onClick={() => setIsSearchOpen(true)}
+              title="Search faculty or room schedules"
+              className="p-1.5 rounded hover:bg-surface-2 text-muted hover:text-text transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <circle cx="11" cy="11" r="7" strokeWidth="2" />
+                <path strokeWidth="2" d="M21 21l-4.35-4.35" />
+              </svg>
+            </button>
+
+            {/* Share Deep Link Button */}
+            <button
+              type="button"
+              onClick={handleShareLink}
+              title="Share current view deep-link"
+              className="p-1.5 rounded hover:bg-surface-2 text-muted hover:text-text transition-colors relative"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeWidth="2" d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13" />
+              </svg>
+              {copiedLink && (
+                <span className="absolute -bottom-6 right-0 text-[10px] bg-brand text-white px-1.5 py-0.5 rounded shadow">
+                  Copied!
+                </span>
+              )}
+            </button>
+
+            <span className="text-border">|</span>
             <span>{istInfo.weekdayShort}</span>
             <span className="text-border">·</span>
             <span className="font-semibold text-text">{istInfo.timeString}</span>
@@ -293,6 +402,16 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
           })}
           isOutsideValidityWindow={isOutsideValidity}
           validityWindow={validityWindow}
+        />
+
+        {/* "Your Next Gap" Personalized Card */}
+        <MyGapCard
+          day={selectedDay}
+          currentPeriodIndex={selectedPeriod}
+          periods={periods}
+          rooms={rooms}
+          occupancyStore={occupancyStore}
+          allBatches={allBatches}
         />
 
         {/* Collapsed/Expandable Day & Period Selector Bar */}
@@ -388,6 +507,18 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
           </p>
         </footer>
       </div>
+
+      {/* Search Modal for Faculty Lookup & Room Schedules */}
+      <SearchModal
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+        day={selectedDay}
+        currentPeriod={selectedPeriod}
+        periods={periods}
+        rooms={rooms}
+        occupancies={occupancies}
+        allProfessors={allProfessors}
+      />
     </div>
   );
 }
