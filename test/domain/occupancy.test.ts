@@ -90,7 +90,9 @@ describe('Occupancy Engine', () => {
       lessonid: parsed.cards[0].lessonid,
       period: '1',
       days: '100000',
-      classroomids: ['*non_existent_room_99999*']
+      classroomids: ['*non_existent_room_99999*'],
+      weeks: '1',
+      locked: false
     };
 
     const expanded = buildOccupancies(
