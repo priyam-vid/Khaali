@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { DayIndex, Period, Room, Occupancy } from '@/lib/domain/rooms';
 
 interface SearchModalProps {
@@ -27,22 +27,88 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   const [selectedProf, setSelectedProf] = useState<string>('Mr. Vikas Singh');
   const [selectedRoomId, setSelectedRoomId] = useState<string>('');
 
-  // Handle Escape key to close modal
+  const modalRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const triggerRef = useRef<Element | null>(null);
+
+  // History back-button integration
+  const handleClose = useCallback(() => {
+    if (typeof window !== 'undefined' && window.history.state?.modal === 'search') {
+      window.history.back();
+    }
+    onClose();
+  }, [onClose]);
+
   useEffect(() => {
     if (!isOpen) return;
+
+    // Capture triggering element before modal takes focus
+    triggerRef.current = document.activeElement;
+
+    // Push history state if not already in modal state
+    if (typeof window !== 'undefined' && window.history.state?.modal !== 'search') {
+      window.history.pushState({ modal: 'search' }, '');
+    }
+
+    const handlePopState = () => {
+      onClose();
+    };
+
+    window.addEventListener('popstate', handlePopState);
+
+    // Auto-focus the search input
+    const focusTimer = setTimeout(() => {
+      inputRef.current?.focus();
+    }, 50);
+
+    // Trap focus and handle Escape
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onClose();
+        e.preventDefault();
+        e.stopPropagation();
+        handleClose();
+        return;
+      }
+
+      if (e.key === 'Tab' && modalRef.current) {
+        const focusable = modalRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusable.length === 0) return;
+
+        const firstElement = focusable[0];
+        const lastElement = focusable[focusable.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === firstElement) {
+            e.preventDefault();
+            lastElement.focus();
+          }
+        } else {
+          if (document.activeElement === lastElement) {
+            e.preventDefault();
+            firstElement.focus();
+          }
+        }
       }
     };
+
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+
+    return () => {
+      clearTimeout(focusTimer);
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('keydown', handleKeyDown);
+      if (triggerRef.current instanceof HTMLElement) {
+        triggerRef.current.focus();
+      }
+    };
+  }, [isOpen, onClose, handleClose]);
 
   // Auto-select first room or EB 305 if available
   useMemo(() => {
     if (!selectedRoomId && rooms.length > 0) {
-      const eb305 = rooms.find(r => r.name.includes('305'));
+      const eb305 = rooms.find(r => r.short.includes('305') || r.name.includes('305'));
       setSelectedRoomId(eb305 ? eb305.id : rooms[0].id);
     }
   }, [rooms, selectedRoomId]);
@@ -54,9 +120,9 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     .filter(p => p.toLowerCase().includes(query.toLowerCase()))
     .slice(0, 15);
 
-  // Filtered rooms list
+  // Filtered rooms list (matches name or short code)
   const filteredRooms = rooms
-    .filter(r => r.name.toLowerCase().includes(query.toLowerCase()))
+    .filter(r => r.name.toLowerCase().includes(query.toLowerCase()) || r.short.toLowerCase().includes(query.toLowerCase()))
     .slice(0, 15);
 
   // Professor schedule for today
@@ -79,9 +145,15 @@ export const SearchModal: React.FC<SearchModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-label="Schedule Inquiry"
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/85"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) handleClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/85 backdrop-blur-xs"
     >
-      <div className="w-full max-w-lg bg-page-bg border border-hairline overflow-hidden flex flex-col max-h-[85vh]">
+      <div
+        ref={modalRef}
+        className="w-full max-w-lg bg-page-bg border border-hairline overflow-hidden flex flex-col max-h-[85vh] shadow-2xl"
+      >
         {/* Mechanical Header */}
         <div className="flex items-center justify-between p-3 border-b border-hairline bg-board-case">
           <div className="flex items-center gap-1.5 font-mono text-xs">
@@ -117,10 +189,10 @@ export const SearchModal: React.FC<SearchModalProps> = ({
 
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             aria-label="Close dialog [ESC]"
             title="Close [ESC]"
-            className="px-2 py-1 bg-cell-bg border border-hairline text-muted hover:text-cell-ink text-xs font-mono uppercase"
+            className="px-2 py-1 bg-cell-bg border border-hairline text-muted hover:text-cell-ink text-xs font-mono uppercase focus:outline-none focus:ring-1 focus:ring-signal"
           >
             [ESC]
           </button>
@@ -129,6 +201,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
         {/* Search Input Bar */}
         <div className="p-3 border-b border-hairline bg-cell-bg">
           <input
+            ref={inputRef}
             type="text"
             placeholder={
               activeTab === 'professors'
@@ -189,7 +262,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                         IN CLASS
                       </span>
                       <span className="font-bold text-cell-ink">
-                        {rooms.find(r => r.id === currentProfClass.roomId)?.name || currentProfClass.roomId}
+                        {rooms.find(r => r.id === currentProfClass.roomId)?.short || currentProfClass.roomId}
                       </span>
                       <span className="text-muted">
                         {' '}[{currentProfClass.subjectName || currentProfClass.subjectCode}] ({currentProfClass.batchNames.join(', ')})
@@ -212,7 +285,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                     <div className="space-y-1">
                       {periods.map(p => {
                         const classInP = profSchedule.find(occ => occ.period === p.index);
-                        const rName = classInP ? rooms.find(r => r.id === classInP.roomId)?.name : null;
+                        const rName = classInP ? (rooms.find(r => r.id === classInP.roomId)?.short || classInP.roomId) : null;
                         return (
                           <div
                             key={p.index}
@@ -258,13 +331,14 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                           setSelectedRoomId(r.id);
                           setQuery('');
                         }}
+                        title={r.name}
                         className={`px-2 py-1 text-xs border transition-colors ${
                           selectedRoomId === r.id
                             ? 'bg-board-case border-signal text-cell-ink font-bold'
                             : 'bg-cell-bg border-hairline text-muted hover:text-cell-ink'
                         }`}
                       >
-                        {r.name}
+                        {r.short}
                       </button>
                     ))}
                   </div>

@@ -92,6 +92,22 @@ export function isLab(name: string): boolean {
 }
 
 /**
+ * Derives a deterministic short room code from the room name and building.
+ * E.g. "Foundation Block 303" -> "FB 303", "Seminar Hall EB 305" -> "EB 305", "Law Block 301" -> "LAW 301".
+ * If building is OTHER or no room number is found, preserves the cleaned name (e.g. "Apple Lab", "Seminar Hall").
+ */
+export function deriveShortRoomName(name: string, building: Building): string {
+  if (building !== 'OTHER') {
+    // Match 3-digit room numbers (e.g. 101, 303, 408A) or other numeric room identifiers
+    const match = name.match(/\b\d{3}[A-Za-z]?\b/) || name.match(/\b\d+\b/);
+    if (match) {
+      return `${building} ${match[0]}`;
+    }
+  }
+  return name;
+}
+
+/**
  * Resolves a room with all derived properties and overrides applied.
  */
 export function resolveRoom(
@@ -101,22 +117,24 @@ export function resolveRoom(
 ): Room {
   const originalName = raw.name;
   const displayName = overrides?.displayNameOverrides?.[originalName] ?? originalName;
-  const rawBuilding = deriveBuilding(originalName);
-  const building = overrides?.buildingOverrides?.[originalName] ?? rawBuilding;
-  const floor = deriveFloor(originalName);
+  const rawBuilding = deriveBuilding(displayName);
+  const building = overrides?.buildingOverrides?.[originalName] ?? overrides?.buildingOverrides?.[displayName] ?? rawBuilding;
+  const floor = deriveFloor(displayName) ?? deriveFloor(originalName);
 
-  const isLabDerived = isLab(originalName);
-  const isForcedLab = overrides?.forceLabByName?.includes(originalName) ?? false;
+  const isLabDerived = isLab(displayName) || isLab(originalName);
+  const isForcedLab = (overrides?.forceLabByName?.includes(originalName) || overrides?.forceLabByName?.includes(displayName)) ?? false;
   const isLabFinal = isLabDerived || isForcedLab;
 
   const isExcludedId = overrides?.excludeRoomIds?.includes(raw.id) ?? false;
-  const isExcludedName = overrides?.excludeRoomNames?.includes(originalName) ?? false;
+  const isExcludedName = (overrides?.excludeRoomNames?.includes(originalName) || overrides?.excludeRoomNames?.includes(displayName)) ?? false;
   const excluded = isExcludedId || isExcludedName;
+
+  const short = deriveShortRoomName(displayName, building);
 
   return {
     id: raw.id,
     name: displayName,
-    short: raw.short || displayName,
+    short,
     building,
     floor,
     isLab: isLabFinal,
@@ -124,3 +142,4 @@ export function resolveRoom(
     neverScheduled: cardCount === 0
   };
 }
+

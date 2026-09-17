@@ -13,6 +13,7 @@ import { TimeSelectorBar } from './TimeSelectorBar';
 import { StatusBanner } from './StatusBanner';
 import { MyGapCard } from './MyGapCard';
 import { SearchModal } from './SearchModal';
+import { KeyboardShortcutsModal } from './KeyboardShortcutsModal';
 
 export interface KhaaliInitialData {
   periods: Period[];
@@ -68,6 +69,7 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
   const [isStaleData, setIsStaleData] = useState<boolean>(initialData.fromFallback);
   const [substitutions, setSubstitutions] = useState<SubstitutionChange[]>([]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
   // Theme state: dark default, supports manual toggle & prefers-color-scheme
@@ -310,7 +312,36 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable ||
+          Boolean(target.closest?.('[contenteditable="true"]')))
+      ) {
+        return;
+      }
+
+      if (e.key === '?') {
+        e.preventDefault();
+        setIsShortcutsOpen(prev => !prev);
+        return;
+      }
+
+      if (e.key === 'Escape') {
+        if (isShortcutsOpen) {
+          setIsShortcutsOpen(false);
+          return;
+        }
+        if (isSearchOpen) {
+          setIsSearchOpen(false);
+          return;
+        }
+      }
+
+      // If any dialog is open, do not hijack arrows or search key
+      if (isSearchOpen || isShortcutsOpen) {
         return;
       }
 
@@ -333,14 +364,25 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
       } else if (e.key === '/') {
         e.preventDefault();
         setIsSearchOpen(true);
-      } else if (e.key === 'Escape') {
-        setIsSearchOpen(false);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [periods.length]);
+  }, [periods.length, isSearchOpen, isShortcutsOpen]);
+
+  // Sync address bar URL seamlessly when filters or slots change
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!isManualTime && selectedBuilding === 'ALL') return;
+    const dayCode = DAY_CODES[selectedDay] || 'mon';
+    const currentParams = new URLSearchParams(window.location.search);
+    currentParams.set('day', dayCode);
+    currentParams.set('period', String(selectedPeriod));
+    currentParams.set('building', selectedBuilding);
+    const newUrl = `${window.location.pathname}?${currentParams.toString()}`;
+    window.history.replaceState(window.history.state, '', newUrl);
+  }, [selectedDay, selectedPeriod, selectedBuilding, isManualTime]);
 
   // Share deep link helper
   const handleShareLink = useCallback(() => {
@@ -461,33 +503,46 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
                   </span>
                 </div>
 
-                {/* Explicit DAY / NIGHT Theme Switch */}
-                <div className="flex items-center border border-hairline bg-page-bg font-mono text-xs">
+                <div className="flex items-center gap-2">
+                  {/* Desktop keyboard shortcuts affordance [?] */}
                   <button
                     type="button"
-                    aria-pressed={theme === 'dark'}
-                    onClick={() => setThemeMode('dark')}
-                    className={`px-2.5 py-1 font-bold uppercase transition-colors ${
-                      theme === 'dark'
-                        ? 'bg-board-case text-signal border-b-2 border-signal'
-                        : 'text-muted hover:text-cell-ink'
-                    }`}
+                    onClick={() => setIsShortcutsOpen(true)}
+                    title="Keyboard & gesture commands [?]"
+                    aria-label="Keyboard and gesture commands guide"
+                    className="hidden [@media(hover:hover)_and_(pointer:fine)]:flex items-center justify-center w-7 h-7 bg-page-bg border border-hairline hover:border-signal text-cell-ink text-xs font-mono font-bold uppercase transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-signal"
                   >
-                    NIGHT
+                    ?
                   </button>
-                  <span className="w-px h-3.5 bg-hairline shrink-0" aria-hidden="true" />
-                  <button
-                    type="button"
-                    aria-pressed={theme === 'light'}
-                    onClick={() => setThemeMode('light')}
-                    className={`px-2.5 py-1 font-bold uppercase transition-colors ${
-                      theme === 'light'
-                        ? 'bg-board-case text-signal border-b-2 border-signal'
-                        : 'text-muted hover:text-cell-ink'
-                    }`}
-                  >
-                    DAY
-                  </button>
+
+                  {/* Explicit DAY / NIGHT Theme Switch */}
+                  <div className="flex items-center border border-hairline bg-page-bg font-mono text-xs">
+                    <button
+                      type="button"
+                      aria-pressed={theme === 'dark'}
+                      onClick={() => setThemeMode('dark')}
+                      className={`px-2.5 py-1 font-bold uppercase transition-colors ${
+                        theme === 'dark'
+                          ? 'bg-board-case text-signal border-b-2 border-signal'
+                          : 'text-muted hover:text-cell-ink'
+                      }`}
+                    >
+                      NIGHT
+                    </button>
+                    <span className="w-px h-3.5 bg-hairline shrink-0" aria-hidden="true" />
+                    <button
+                      type="button"
+                      aria-pressed={theme === 'light'}
+                      onClick={() => setThemeMode('light')}
+                      className={`px-2.5 py-1 font-bold uppercase transition-colors ${
+                        theme === 'light'
+                          ? 'bg-board-case text-signal border-b-2 border-signal'
+                          : 'text-muted hover:text-cell-ink'
+                      }`}
+                    >
+                      DAY
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -506,6 +561,19 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
                   </div>
                 </div>
               </div>
+
+              {/* Station Clock Sync Status */}
+              <div className="mt-2.5 pt-2 border-t border-hairline/60 flex items-center justify-between font-mono text-[10px] text-muted">
+                <span className="uppercase tracking-wider">SYNC STATUS</span>
+                <span className="tabular-nums uppercase font-semibold text-cell-ink" title={new Date(fetchedAt).toISOString()}>
+                  LAST SYNCED: {new Date(fetchedAt).toLocaleTimeString('en-US', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true,
+                    timeZone: 'Asia/Kolkata',
+                  })} IST
+                </span>
+              </div>
             </div>
 
             {/* Quick Action Controls (Search & Share) */}
@@ -514,7 +582,7 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
                 type="button"
                 onClick={() => setIsSearchOpen(true)}
                 aria-label="Search faculty or room schedules"
-                className="min-h-[42px] flex items-center justify-center gap-1.5 px-3 py-2 bg-cell-bg border border-hairline hover:bg-board-case/70 text-cell-ink font-bold uppercase transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-signal"
+                className="min-h-[44px] flex items-center justify-center gap-1.5 px-3 py-2 bg-cell-bg border border-hairline hover:bg-board-case/70 text-cell-ink font-bold uppercase transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-signal"
               >
                 <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <circle cx="11" cy="11" r="7" strokeWidth="2" />
@@ -527,7 +595,7 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
                 type="button"
                 onClick={handleShareLink}
                 aria-label="Share current view deep link"
-                className="min-h-[42px] flex items-center justify-center gap-1.5 px-3 py-2 bg-cell-bg border border-hairline hover:bg-board-case/70 text-cell-ink font-bold uppercase transition-colors relative focus:outline-none focus-visible:ring-1 focus-visible:ring-signal"
+                className="min-h-[44px] flex items-center justify-center gap-1.5 px-3 py-2 bg-cell-bg border border-hairline hover:bg-board-case/70 text-cell-ink font-bold uppercase transition-colors relative focus:outline-none focus-visible:ring-1 focus-visible:ring-signal"
               >
                 <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeWidth="2" d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13" />
@@ -558,9 +626,18 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
 
             {/* Keyboard Shortcuts Guide (Desktop only) */}
             <div className="hidden lg:block border border-hairline bg-cell-bg p-3 font-mono text-[11px] text-muted">
-              <div className="uppercase tracking-wider font-bold text-cell-ink mb-1.5 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 bg-signal shrink-0" aria-hidden="true" />
-                <span>KEYBOARD COMMANDS</span>
+              <div className="uppercase tracking-wider font-bold text-cell-ink mb-1.5 flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 bg-signal shrink-0" aria-hidden="true" />
+                  <span>KEYBOARD COMMANDS</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsShortcutsOpen(true)}
+                  className="text-[10px] text-muted hover:text-signal underline uppercase focus:outline-none"
+                >
+                  FULL GUIDE [?]
+                </button>
               </div>
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
@@ -574,6 +651,10 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
                 <div className="flex items-center justify-between">
                   <span>Search Faculty/Room</span>
                   <span className="px-1 py-0.5 bg-board-case border border-hairline text-cell-ink">/</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Shortcuts & Gestures</span>
+                  <span className="px-1 py-0.5 bg-board-case border border-hairline text-cell-ink">?</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span>Dismiss Dialog</span>
@@ -701,9 +782,10 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
                       {filteredNeverScheduled.map(room => (
                         <span
                           key={room.id}
+                          title={room.name}
                           className="px-2 py-1 bg-cell-bg border border-hairline text-xs font-mono text-muted uppercase"
                         >
-                          {room.name} [{room.building}]
+                          {room.short} [{room.building}]
                         </span>
                       ))}
                     </div>
@@ -743,6 +825,12 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
         rooms={rooms}
         occupancies={effectiveOccupancies}
         allProfessors={allProfessors}
+      />
+
+      {/* Keyboard & Gesture Shortcuts Guide Modal */}
+      <KeyboardShortcutsModal
+        isOpen={isShortcutsOpen}
+        onClose={() => setIsShortcutsOpen(false)}
       />
     </div>
   );

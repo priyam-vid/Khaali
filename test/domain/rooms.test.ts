@@ -5,6 +5,7 @@ import {
   deriveBuilding,
   deriveFloor,
   isLab,
+  deriveShortRoomName,
   resolveRoom,
   OverridesConfig
 } from '../../src/lib/domain/rooms';
@@ -117,10 +118,87 @@ describe('Room Domain & Classification', () => {
       const eb305 = classroomsRaw.find((r: { name: string }) => r.name === 'EB 305');
       const resolved = resolveRoom(eb305, 10, overrides);
       expect(resolved.name).toBe('EB 305');
+      expect(resolved.short).toBe('EB 305');
       expect(resolved.isLab).toBe(false);
       expect(resolved.building).toBe('EB');
       expect(resolved.floor).toBe(3);
       expect(resolved.excluded).toBe(false);
+    });
+  });
+
+  describe('deriveShortRoomName & room abbreviation resolution', () => {
+    it('abbreviates plain Foundation Block rooms properly', () => {
+      const fb303 = resolveRoom({ id: 'fb303', name: 'Foundation Block 303' }, 5);
+      expect(fb303.name).toBe('Foundation Block 303');
+      expect(fb303.short).toBe('FB 303');
+
+      const fb101 = resolveRoom({ id: 'fb101', name: 'Foundation Block 101' }, 5);
+      expect(fb101.short).toBe('FB 101');
+
+      const fb102 = resolveRoom({ id: 'fb102', name: 'Foundation Block-102' }, 5);
+      expect(fb102.short).toBe('FB 102');
+    });
+
+    it('abbreviates EB rooms properly', () => {
+      const eb305 = resolveRoom({ id: 'eb305', name: 'EB 305' }, 5);
+      expect(eb305.name).toBe('EB 305');
+      expect(eb305.short).toBe('EB 305');
+
+      const eb201 = resolveRoom({ id: 'eb201', name: 'EB 201' }, 5);
+      expect(eb201.short).toBe('EB 201');
+    });
+
+    it('abbreviates SVH rooms properly', () => {
+      const svh201 = resolveRoom({ id: 'svh201', name: 'SVH 201' }, 5);
+      expect(svh201.name).toBe('SVH 201');
+      expect(svh201.short).toBe('SVH 201');
+
+      const svh302 = resolveRoom({ id: 'svh302', name: 'SVH 302' }, 5);
+      expect(svh302.short).toBe('SVH 302');
+    });
+
+    it('abbreviates Law Block rooms properly', () => {
+      const law301 = resolveRoom({ id: 'law301', name: 'Law Block 301' }, 5);
+      expect(law301.name).toBe('Law Block 301');
+      expect(law301.short).toBe('LAW 301');
+
+      const law408 = resolveRoom({ id: 'law408', name: 'Law Block 408' }, 5);
+      expect(law408.short).toBe('LAW 408');
+    });
+
+    it('applies displayNameOverrides to abbreviation logic', () => {
+      const customOverrides: OverridesConfig = {
+        displayNameOverrides: {
+          'Seminar Hall': 'Seminar Hall EB 305',
+          'Special Room': 'Foundation Block 405'
+        }
+      };
+
+      const semHall = resolveRoom({ id: 'sh1', name: 'Seminar Hall' }, 0, customOverrides);
+      expect(semHall.name).toBe('Seminar Hall EB 305');
+      expect(semHall.short).toBe('EB 305');
+
+      const specRoom = resolveRoom({ id: 'sr1', name: 'Special Room' }, 0, customOverrides);
+      expect(specRoom.name).toBe('Foundation Block 405');
+      expect(specRoom.short).toBe('FB 405');
+    });
+
+    it('applies buildingOverrides to abbreviation logic', () => {
+      const customOverrides: OverridesConfig = {
+        buildingOverrides: {
+          'Room 204': 'FB'
+        }
+      };
+
+      const room = resolveRoom({ id: 'r204', name: 'Room 204' }, 5, customOverrides);
+      expect(room.building).toBe('FB');
+      expect(room.short).toBe('FB 204');
+    });
+
+    it('preserves un-prefixed rooms without room numbers', () => {
+      expect(deriveShortRoomName('Apple Lab', 'OTHER')).toBe('Apple Lab');
+      expect(deriveShortRoomName('Dell Lab', 'OTHER')).toBe('Dell Lab');
+      expect(deriveShortRoomName('Physics Lab I', 'OTHER')).toBe('Physics Lab I');
     });
   });
 

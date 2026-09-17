@@ -78,7 +78,7 @@ export const MyGapCard: React.FC<MyGapCardProps> = ({
       
       // Calculate vacant rooms during this free gap
       const vacancy = evaluateVacancy(day, currentPeriodIndex, rooms, periods, occupancyStore);
-      const nearestRooms = vacancy.rankedRuns.slice(0, 3).map(r => r.room.name);
+      const nearestRooms = vacancy.rankedRuns.slice(0, 3).map(r => r.room.short);
 
       return {
         isFreeNow: true,
@@ -108,7 +108,7 @@ export const MyGapCard: React.FC<MyGapCardProps> = ({
       let nearestRooms: string[] = [];
       if (nextGapStart) {
         const gapVacancy = evaluateVacancy(day, nextGapStart.index, rooms, periods, occupancyStore);
-        nearestRooms = gapVacancy.rankedRuns.slice(0, 3).map(r => r.room.name);
+        nearestRooms = gapVacancy.rankedRuns.slice(0, 3).map(r => r.room.short);
       }
 
       return {

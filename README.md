@@ -57,17 +57,55 @@ The SoCSE timetable is published per-batch across dozens of different sections o
 
 - **Instant Hero Answer**: Single best vacant room displayed in ~40px monospaced typography with remaining duration.
 - **Duration-First Ranking**: Rooms free for multiple consecutive periods are prioritized over 1-period slots.
+- **Deterministic Room Abbreviations**: Flap rows display clean room codes (e.g. `EB 305`, `FB 303`, `LAW 301`) derived deterministically from building blocks and room numbers, while preserving full room names for tooltips and accessibility.
 - **Personal Layer ("Your Next Gap")**: Select your batch (e.g. `2BCA1`, `1CSE4`) saved to `localStorage` to view your next break and nearest vacant classrooms.
-- **Faculty Lookup**: Instant search for faculty members (e.g. *"where is Mr. Vikas Singh right now?"*).
-- **Classroom Day Schedule**: Look up any room to see its full 9-period schedule.
-- **Shareable Deep Links**: Direct link sharing via URL query parameters (`/?day=wed&period=5&building=EB`).
-- **Resilient Upstream Caching**:
-  - `/api/timetable`: ISR cached for **1 hour** (`revalidate = 3600`).
-  - `/api/substitutions`: ISR cached for **5 minutes** (`revalidate = 300`).
-  - Server-side fallback serving verified cached payloads with amber warnings if upstream is unreachable.
-  - Client-side `localStorage` cache for campus Wi-Fi dropouts.
+- **Faculty & Room Schedule Inquiry**: Instant lookup for faculty schedules and classroom multi-period timelines with full focus trap and back-button history navigation.
+- **Mobile Swipe & Desktop Keyboard Navigation**:
+  - `←` / `→`: Cycle timetable day (Mon – Sat).
+  - `↑` / `↓`: Cycle timetable period slot (1 – 9).
+  - `/`: Quick search faculty or room profiles.
+  - `?`: Toggle keyboard & gesture guide modal.
+  - `ESC`: Dismiss active dialogs.
+  - Touch Swipes: Horizontal swipe left/right (>40px) on the time selector bar smoothly advances/retreats period slots.
+- **Shareable Deep Links**: URL parameters (`/?day=wed&period=5&building=EB`) automatically reflect selection and round-trip cleanly.
+- **Automatic Daily Sync & Resilient Persistence**:
+  - Daily Vercel Cron at **09:30 IST** (`0 4 * * *` UTC) captures morning substitutions and room updates.
+  - Timetable data is persisted as an atomic snapshot in **Vercel Blob** (with automatic local file cache fallback for offline runs).
+  - 26-hour staleness threshold ensures instant zero-latency page loads while keeping cached schedules fresh.
+  - Manual resync trigger via `/api/cron/sync-timetable?key=...`.
 - **PWA Ready**: Web App Manifest, Service Worker (cache-first for shell, network-first for data), and home-screen installable.
 - **Dark & Light Modes**: High contrast departure board with persistent theme toggle (WCAG AA compliant).
+
+---
+
+## Automatic Daily Synchronization & Persistence
+
+### 1. Vercel Cron Schedule
+- **Time**: 09:30 IST (Asia/Kolkata = UTC+5:30 with no DST) $\rightarrow$ **04:00 UTC**.
+- **Cron Expression**: `0 4 * * *` configured in `vercel.json`.
+- **Rationale**: College classes begin at 09:00 IST. The cron triggers at 09:30 IST to capture morning departmental substitution notices, teacher leaves, and room reassignments before students enter their mid-day breaks.
+
+### 2. Persistence Layer: Vercel Blob + Local File Fallback
+- **Vercel Blob**: The entire normalized timetable (~150 KB JSON payload) is stored atomically in Vercel Blob (`timetable/store.json`). This eliminates database connection pools, cold start overhead, and complex SQL migrations.
+- **Offline & CI Fallback**: When `BLOB_READ_WRITE_TOKEN` is not present (e.g. in Vitest test runs, local offline development, or build pipelines), the store automatically falls back to an atomic local file cache (`.next/cache/timetable-store.json` or `/tmp`), ensuring zero test failures in air-gapped environments.
+- **Staleness Threshold**: Set to **26 hours** (`STALENESS_THRESHOLD_MS`). If the stored snapshot is under 26 hours old, `/api/timetable` serves it directly. If the store is stale or absent, the route performs a live scrape to EduPage, saves the fresh snapshot, or gracefully falls back to the last-known-good snapshot.
+
+### 3. Manual Re-Sync Trigger
+You can force an immediate resync without waiting for the scheduled cron run:
+```bash
+# Via Bearer Token
+curl -X GET "https://khaali.vercel.app/api/cron/sync-timetable" \
+  -H "Authorization: Bearer <CRON_SECRET>"
+
+# Or via Query Param / Debug Header
+curl -X GET "https://khaali.vercel.app/api/cron/sync-timetable?key=<DEBUG_KEY>"
+```
+
+### 4. EduPage RPC Cadence & Sensitivity Observations
+During architectural reverse engineering of EduPage (`regulartt.js`, `substitution.js`, `ttviewer.js`), several key operational behaviors were noted:
+- **Session State & Rate Limiting**: EduPage tracks client sessions using PHP session cookies (`PHPSESSID`). Making rapid concurrent requests across multiple periods or batches without carrying forward session cookies triggers EduPage's anti-scraping guard (`reload: true` responses or HTTP 503 drops).
+- **Sequential Ingestion**: Khaali's ingest pipeline batches queries sequentially with retry backoff rather than launching burst calls.
+- **Shielding the Origin**: Without centralized storage, every student opening Khaali would trigger upstream calls to the college's EduPage server. The daily 09:30 IST cron job and Vercel Blob store shield the university servers completely, allowing hundreds of students to query room vacancies concurrently with sub-50ms response times.
 
 ---
 
@@ -77,7 +115,8 @@ The SoCSE timetable is published per-batch across dozens of different sections o
 - **Styling**: Tailwind CSS with CSS Custom Properties
 - **Data Validation**: Zod
 - **Testing**: Vitest (100% offline against recorded raw fixtures)
-- **Zero Runtime UI Bloat**: No UI component libraries, no icon packs (inline vector SVGs only), sub-100KB gzipped first load JS.
+- **Persistence**: Vercel Blob + Local Atomic Cache Fallback
+- **Zero Runtime UI Bloat**: No UI component libraries, no external icon packs (inline vector SVGs only), sub-115KB gzipped first load JS.
 
 ---
 
@@ -98,39 +137,45 @@ khali/
 ├── src/
 │   ├── app/
 │   │   ├── api/
+│   │   │   ├── cron/
+│   │   │   │   └── sync-timetable/# Vercel Cron daily sync route (09:30 IST)
 │   │   │   ├── debug/route.ts     # Schema diagnostics (?key=khaali-debug)
-│   │   │   ├── substitutions/     # ISR 300s intraday changes
-│   │   │   └── timetable/         # ISR 3600s base timetable
+│   │   │   ├── substitutions/     # Daily substitutions endpoint
+│   │   │   └── timetable/         # Base timetable endpoint (serves Blob store)
 │   │   ├── globals.css            # Design tokens & color system
 │   │   ├── layout.tsx             # Fonts & metadata
 │   │   ├── manifest.ts            # Web App Manifest route
 │   │   └── page.tsx               # Server-rendered home view
 │   ├── components/
-│   │   ├── DayTabs.tsx            # Day selector
+│   │   ├── DayTabs.tsx            # Day selector (min 44px)
 │   │   ├── FilterChips.tsx        # Building filter buttons (min 44px)
 │   │   ├── HeroAnswer.tsx         # Best vacant room display
+│   │   ├── KeyboardShortcutsModal.tsx # Shortcuts & gesture guide modal
 │   │   ├── KhaaliClient.tsx       # Live client orchestrator
 │   │   ├── MyGapCard.tsx          # Batch gap tracker
-│   │   ├── PeriodPicker.tsx       # Period grid
-│   │   ├── RoomRow.tsx            # Scannable departure row
-│   │   ├── SearchModal.tsx        # Professor & room schedule lookup
+│   │   ├── PeriodPicker.tsx       # Period grid (min 44px)
+│   │   ├── RoomRow.tsx            # Scannable departure row with short codes
+│   │   ├── SearchModal.tsx        # Professor & room inquiry with focus trap
 │   │   ├── StatusBanner.tsx       # Amber warnings & validity check
-│   │   └── TimeSelectorBar.tsx    # Collapsed single-line bar
+│   │   └── TimeSelectorBar.tsx    # Touch-swipeable time selector bar
 │   ├── data/
 │   │   └── overrides.json         # Forced lab / room name overrides
 │   └── lib/
 │       ├── domain/
 │       │   ├── occupancy.ts       # Multi-period & split card expansion
-│       │   ├── rooms.ts           # Building & floor regex, lab detection
+│       │   ├── rooms.ts           # Short room abbreviation engine
 │       │   ├── time.ts            # Asia/Kolkata IST period detection
 │       │   └── vacancy.ts         # Vacancy subtraction & ranking
-│       └── edupage/
-│           ├── client.ts          # Server-side RPC transport with retries
-│           ├── parse.ts           # Raw tables -> domain models
-│           ├── schema.ts          # Zod schema validation
-│           └── substitutions.ts   # Substitution HTML parser & merger
-└── test/
-    └── domain/                    # 35 offline unit tests
+│       ├── edupage/
+│       │   ├── client.ts          # Server-side RPC transport with retries
+│       │   ├── parse.ts           # Raw tables -> domain models
+│       │   ├── schema.ts          # Zod schema validation
+│       │   └── substitutions.ts   # Substitution HTML parser & merger
+│       └── storage/
+│           └── timetable-store.ts # Vercel Blob persistence & local fallback
+├── test/
+│   └── domain/                    # 42 offline unit tests
+└── vercel.json                    # Cron configuration (09:30 IST)
 ```
 
 ---
@@ -158,7 +203,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 ```bash
 npm run test
 ```
-Runs 35 tests covering room derivation, group splits (2BCA1 Apple/Dell Lab), multi-period unrolling, IST period detection, and full-period hand verification against the fixture.
+Runs 42 tests covering deterministic short room derivations, overrides propagation, group splits (2BCA1 Apple/Dell Lab), multi-period unrolling, IST period detection, and full-period hand verification against the fixture.
 
 ### 5. Typecheck & Production Build
 ```bash
@@ -169,14 +214,16 @@ npm run start
 
 ---
 
-## Diagnostics Endpoint
+## Diagnostics & Resync Endpoints
 
-A gated diagnostics route is available to inspect raw parsing, derived room counts, and active period detection:
-
-```text
-http://localhost:3000/api/debug?key=khaali-debug
-```
-*(Configure `process.env.DEBUG_KEY` in production).*
+- **Diagnostics**:
+  ```text
+  http://localhost:3000/api/debug?key=khaali-debug
+  ```
+- **Manual Timetable Resync**:
+  ```text
+  http://localhost:3000/api/cron/sync-timetable?key=khaali-debug
+  ```
 
 ---
 

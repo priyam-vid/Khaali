@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { DayIndex, Period } from '@/lib/domain/rooms';
 import { DayTabs } from './DayTabs';
 import { PeriodPicker } from './PeriodPicker';
@@ -25,20 +25,63 @@ export const TimeSelectorBar: React.FC<TimeSelectorBarProps> = ({
   onResetToLive,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
 
   const activePeriod = periods.find(p => p.index === selectedPeriod) || periods[0];
   const dayLabel = DAY_LABELS[selectedDay] || 'MON';
 
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null || touchStartY.current === null) return;
+    const touchEndX = e.changedTouches[0].clientX;
+    const touchEndY = e.changedTouches[0].clientY;
+    const deltaX = touchEndX - touchStartX.current;
+    const deltaY = touchEndY - touchStartY.current;
+
+    touchStartX.current = null;
+    touchStartY.current = null;
+
+    // Threshold >40px and predominantly horizontal (|deltaX| > |deltaY| * 1.2)
+    if (Math.abs(deltaX) > 40 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2) {
+      if (deltaX < 0) {
+        // Swiped Left -> Advance
+        if (selectedPeriod < periods.length) {
+          onSelectPeriod(selectedPeriod + 1);
+        } else {
+          onSelectDay(((selectedDay + 1) % 6) as DayIndex);
+          onSelectPeriod(1);
+        }
+      } else {
+        // Swiped Right -> Retreat
+        if (selectedPeriod > 1) {
+          onSelectPeriod(selectedPeriod - 1);
+        } else {
+          onSelectDay(((selectedDay + 5) % 6) as DayIndex);
+          onSelectPeriod(periods.length);
+        }
+      }
+    }
+  };
+
   return (
-    <div className="my-2 border border-hairline bg-cell-bg">
-      {/* Collapsed Bar: Minimum 44px tap target */}
-      <div className="min-h-[44px] flex items-center justify-between px-3 py-2">
+    <div className="my-2 border border-hairline bg-cell-bg select-none">
+      {/* Collapsed Bar: Minimum 44px tap target with touch swipe support */}
+      <div
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        className="min-h-[44px] flex items-center justify-between px-3 py-2"
+      >
         <button
           type="button"
           aria-expanded={isOpen}
-          aria-label="Change day and period"
+          aria-label="Change day and period (swipe left/right to cycle)"
           onClick={() => setIsOpen(prev => !prev)}
-          className="flex-1 flex items-center gap-2 sm:gap-2.5 text-left font-mono text-xs sm:text-sm text-cell-ink hover:text-signal transition-colors focus:outline-none"
+          className="flex-1 flex items-center gap-2 sm:gap-2.5 text-left font-mono text-xs sm:text-sm text-cell-ink hover:text-signal transition-colors focus:outline-none min-h-[44px]"
         >
           <span className="font-bold text-cell-ink bg-board-case px-2 py-0.5 border border-hairline uppercase">
             {dayLabel}
@@ -60,7 +103,7 @@ export const TimeSelectorBar: React.FC<TimeSelectorBarProps> = ({
             type="button"
             onClick={onResetToLive}
             title="Snap back to current IST time"
-            className="min-h-[32px] px-2.5 py-1 bg-brand text-white text-[11px] font-mono font-bold tracking-wider hover:opacity-90 transition-opacity ml-2 border border-brand uppercase"
+            className="min-h-[44px] px-3 py-2 bg-brand text-white text-[11px] font-mono font-bold tracking-wider hover:opacity-90 transition-opacity ml-2 border border-brand uppercase flex items-center justify-center shrink-0"
           >
             LIVE IST ⟲
           </button>

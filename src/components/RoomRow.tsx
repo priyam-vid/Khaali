@@ -74,10 +74,14 @@ export const RoomRow: React.FC<RoomRowProps> = ({
             </span>
           )}
 
-          {/* Room Name */}
+          {/* Room Name (Short Code) */}
           <div className="flex items-baseline gap-2 min-w-0">
-            <span className="font-mono font-bold text-base sm:text-lg text-cell-ink tracking-tight truncate">
-              {run.room.name}
+            <span
+              className="font-mono font-bold text-base sm:text-lg text-cell-ink tracking-tight truncate"
+              title={run.room.name}
+              aria-label={run.room.name}
+            >
+              {run.room.short}
             </span>
             <span className="font-mono text-[10px] uppercase px-1.5 py-0.5 border border-hairline bg-board-case text-muted shrink-0">
               {run.room.building}

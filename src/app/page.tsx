@@ -4,10 +4,27 @@ import { parseTimetable } from '@/lib/edupage/parse';
 import { buildOccupancies } from '@/lib/domain/occupancy';
 import { OverridesConfig } from '@/lib/domain/rooms';
 import { KhaaliClient, KhaaliInitialData } from '@/components/KhaaliClient';
+import { getPersistedTimetable, isStoreStale } from '@/lib/storage/timetable-store';
 
 export const dynamic = 'force-dynamic';
 
-function loadInitialTimetable(): KhaaliInitialData {
+async function loadInitialTimetable(): Promise<KhaaliInitialData> {
+  try {
+    const persisted = await getPersistedTimetable();
+    if (persisted) {
+      return {
+        periods: persisted.periods,
+        rooms: persisted.rooms,
+        occupancies: persisted.occupancies,
+        validityWindow: persisted.validityWindow,
+        fetchedAt: persisted.fetchedAt,
+        fromFallback: isStoreStale(persisted),
+      };
+    }
+  } catch (err) {
+    console.warn('Page: Could not load persisted timetable, using local fixture:', err);
+  }
+
   const fixturePath = path.resolve(process.cwd(), 'fixtures/regulartt.raw.json');
   const rawFixture = JSON.parse(fs.readFileSync(fixturePath, 'utf8'));
 
@@ -42,8 +59,8 @@ function loadInitialTimetable(): KhaaliInitialData {
   };
 }
 
-export default function Page() {
-  const initialData = loadInitialTimetable();
+export default async function Page() {
+  const initialData = await loadInitialTimetable();
 
   return (
     <main>
