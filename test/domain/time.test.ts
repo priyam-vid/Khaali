@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { detectCurrentPeriod, getISTTimeInfo } from '../../src/lib/domain/time';
+import { detectCurrentPeriod, getISTTimeInfo, formatRelativeTime } from '../../src/lib/domain/time';
 import { Period } from '../../src/lib/domain/rooms';
 
 describe('Time Engine & Period Detection', () => {
@@ -83,5 +83,48 @@ describe('Time Engine & Period Detection', () => {
     const result = detectCurrentPeriod(standardPeriods, utcDate);
     expect(result.state).toBe('IN_PERIOD');
     expect(result.activePeriodIndex).toBe(5); // Period 5 (12:40-13:35)
+  });
+
+  describe('formatRelativeTime', () => {
+    const baseNow = new Date('2026-09-16T12:00:00Z');
+
+    it('returns "just now" for differences under 1 minute', () => {
+      const past30s = new Date('2026-09-16T11:59:30Z').getTime();
+      expect(formatRelativeTime(past30s, baseNow)).toBe('just now');
+    });
+
+    it('formats minutes ago correctly', () => {
+      const past5m = new Date('2026-09-16T11:55:00Z').getTime();
+      expect(formatRelativeTime(past5m, baseNow)).toBe('5m ago');
+
+      const past59m = new Date('2026-09-16T11:01:00Z').getTime();
+      expect(formatRelativeTime(past59m, baseNow)).toBe('59m ago');
+    });
+
+    it('formats hours ago correctly', () => {
+      const past2h = new Date('2026-09-16T10:00:00Z').getTime();
+      expect(formatRelativeTime(past2h, baseNow)).toBe('2h ago');
+
+      const past23h = new Date('2026-09-15T13:00:00Z').getTime();
+      expect(formatRelativeTime(past23h, baseNow)).toBe('23h ago');
+    });
+
+    it('formats days ago correctly', () => {
+      const past1d = new Date('2026-09-15T12:00:00Z').getTime();
+      expect(formatRelativeTime(past1d, baseNow)).toBe('1d ago');
+
+      const past3d = new Date('2026-09-13T12:00:00Z').getTime();
+      expect(formatRelativeTime(past3d, baseNow)).toBe('3d ago');
+    });
+
+    it('handles timestamps in the future or clock-skew safely as "just now"', () => {
+      const futureTime = new Date('2026-09-16T12:05:00Z').getTime();
+      expect(formatRelativeTime(futureTime, baseNow)).toBe('just now');
+    });
+
+    it('handles zero or NaN timestamps gracefully', () => {
+      expect(formatRelativeTime(0, baseNow)).toBe('');
+      expect(formatRelativeTime(NaN, baseNow)).toBe('');
+    });
   });
 });

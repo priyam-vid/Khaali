@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Period, Room, Occupancy, DayIndex } from '@/lib/domain/rooms';
 import { createOccupancyStore } from '@/lib/domain/occupancy';
 import { evaluateVacancy, ExtendedFreeRun } from '@/lib/domain/vacancy';
-import { detectCurrentPeriod, getISTTimeInfo } from '@/lib/domain/time';
+import { detectCurrentPeriod, getISTTimeInfo, formatRelativeTime } from '@/lib/domain/time';
 import { applySubstitutions, SubstitutionChange } from '@/lib/edupage/substitutions';
 import { HeroAnswer } from './HeroAnswer';
 import { RoomRow } from './RoomRow';
@@ -41,6 +41,7 @@ const DAY_MAP: Record<string, DayIndex> = {
 };
 
 const DAY_CODES = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 function parseDateFromDDMMYYYY(dateStr: string): Date | null {
   const parts = dateStr.split('/');
@@ -70,7 +71,10 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
   const [substitutions, setSubstitutions] = useState<SubstitutionChange[]>([]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
-  const [copiedLink, setCopiedLink] = useState(false);
+
+  // Screen reader live announcement for day/period selection
+  const [announcement, setAnnouncement] = useState('');
+  const isMountedRef = React.useRef(false);
 
   // Theme state: dark default, supports manual toggle & prefers-color-scheme
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
@@ -384,20 +388,15 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
     window.history.replaceState(window.history.state, '', newUrl);
   }, [selectedDay, selectedPeriod, selectedBuilding, isManualTime]);
 
-  // Share deep link helper
-  const handleShareLink = useCallback(() => {
-    if (typeof window === 'undefined') return;
-    const dayCode = DAY_CODES[selectedDay] || 'mon';
-    const buildingCode = selectedBuilding;
-    const url = `${window.location.origin}/?day=${dayCode}&period=${selectedPeriod}&building=${buildingCode}`;
-
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(url).then(() => {
-        setCopiedLink(true);
-        setTimeout(() => setCopiedLink(false), 2000);
-      });
+  // Screen reader live announcement for day/period changes
+  useEffect(() => {
+    if (!isMountedRef.current) {
+      isMountedRef.current = true;
+      return;
     }
-  }, [selectedDay, selectedPeriod, selectedBuilding]);
+    const dayName = DAY_NAMES[selectedDay] || 'Monday';
+    setAnnouncement(`${dayName}, Period ${selectedPeriod} selected`);
+  }, [selectedDay, selectedPeriod]);
 
   // Evaluate vacancy for selected day & period
   const evaluation = useMemo(() => {
@@ -498,9 +497,6 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
                   <span className="font-mono text-xl sm:text-2xl font-black tracking-wider text-cell-ink">
                     KHAALI
                   </span>
-                  <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 bg-brand text-white border border-brand uppercase">
-                    SoCSE
-                  </span>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -571,36 +567,24 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
                     minute: '2-digit',
                     hour12: true,
                     timeZone: 'Asia/Kolkata',
-                  })} IST
+                  })} IST · {formatRelativeTime(fetchedAt, now)}
                 </span>
               </div>
             </div>
 
-            {/* Quick Action Controls (Search & Share) */}
-            <div className="grid grid-cols-2 gap-2 font-mono text-xs">
+            {/* Quick Action Controls (Search) */}
+            <div className="font-mono text-xs">
               <button
                 type="button"
                 onClick={() => setIsSearchOpen(true)}
                 aria-label="Search faculty or room schedules"
-                className="min-h-[44px] flex items-center justify-center gap-1.5 px-3 py-2 bg-cell-bg border border-hairline hover:bg-board-case/70 text-cell-ink font-bold uppercase transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-signal"
+                className="w-full min-h-[44px] flex items-center justify-center gap-1.5 px-3 py-2 bg-cell-bg border border-hairline hover:bg-board-case/70 text-cell-ink font-bold uppercase transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-signal"
               >
                 <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <circle cx="11" cy="11" r="7" strokeWidth="2" />
                   <path strokeWidth="2" d="M21 21l-4.35-4.35" />
                 </svg>
                 <span>SEARCH [/]</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleShareLink}
-                aria-label="Share current view deep link"
-                className="min-h-[44px] flex items-center justify-center gap-1.5 px-3 py-2 bg-cell-bg border border-hairline hover:bg-board-case/70 text-cell-ink font-bold uppercase transition-colors relative focus:outline-none focus-visible:ring-1 focus-visible:ring-signal"
-              >
-                <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeWidth="2" d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13" />
-                </svg>
-                <span>{copiedLink ? 'COPIED!' : 'SHARE LINK'}</span>
               </button>
             </div>
 
@@ -668,6 +652,11 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
           {/* RIGHT MAIN PANE (The Solari Departure Board) */}
           {/* ========================================================================= */}
           <main className="flex-1 min-w-0 w-full">
+            {/* Screen reader live announcement for day/period selection */}
+            <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+              {announcement}
+            </div>
+
             {/* Split-Flap Board Housing Frame */}
             <div className="border border-hairline bg-board-case p-3 sm:p-4 mb-3">
               {/* Board Header Bar */}

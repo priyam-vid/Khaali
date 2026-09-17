@@ -26,12 +26,12 @@ export const FilterChips: React.FC<FilterChipsProps> = ({
 }) => {
   if (orientation === 'vertical') {
     return (
-      <nav aria-label="Building filters" className="space-y-1">
+      <nav aria-label="Building filters" className="space-y-2">
         <div className="text-[11px] font-mono text-muted uppercase tracking-wider mb-2 flex items-center gap-1.5">
           <span className="w-1.5 h-1.5 bg-signal shrink-0" aria-hidden="true" />
           <span>FILTER BY BUILDING</span>
         </div>
-        <div className="flex flex-col gap-1">
+        <div className="grid grid-cols-3 gap-1.5">
           {CHIPS.map(chip => {
             const isSelected = selected === chip.id;
             const count = counts[chip.id];
@@ -42,15 +42,15 @@ export const FilterChips: React.FC<FilterChipsProps> = ({
                 type="button"
                 aria-pressed={isSelected}
                 onClick={() => onChange(chip.id)}
-                className={`min-h-[38px] w-full flex items-center justify-between px-3 py-2 text-xs font-mono transition-colors border focus:outline-none focus-visible:ring-1 focus-visible:ring-signal ${
+                className={`min-h-[50px] flex flex-col items-center justify-center p-2 text-xs font-mono transition-colors border focus:outline-none focus-visible:ring-1 focus-visible:ring-signal ${
                   isSelected
-                    ? 'bg-board-case text-cell-ink border-signal border-l-4 font-bold'
+                    ? 'bg-board-case text-cell-ink border-signal border-b-2 font-bold'
                     : 'bg-cell-bg text-muted border-hairline hover:bg-board-case/60 hover:text-cell-ink font-medium'
                 }`}
               >
-                <span>{chip.label}</span>
+                <span className="truncate">{chip.id === 'ALL' ? 'ALL' : chip.label}</span>
                 {count !== undefined && (
-                  <span className="text-[11px] tabular-nums font-mono opacity-80">
+                  <span className="text-[10px] opacity-75 tabular-nums mt-0.5 font-mono">
                     [{count}]
                   </span>
                 )}

@@ -27,7 +27,7 @@ The SoCSE timetable is published per-batch across dozens of different sections o
 
 ```text
 ┌──────────────────────────────────────────────┐
-│ KHAALI  SoCSE                    Wed · 12:47 │  ← Live IST Clock & wordmark
+│ KHAALI                           Wed · 12:47 │  ← Live IST Clock & wordmark
 ├──────────────────────────────────────────────┤
 │ BATCH: 2BCA1                        [Change] │  ← Personalized gap tracker
 │ You're free 12:40–13:35                      │     Nearest vacant: EB 201, EB 207

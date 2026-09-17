@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { DayIndex, Period } from '@/lib/domain/rooms';
 import { DayTabs } from './DayTabs';
 import { PeriodPicker } from './PeriodPicker';
@@ -24,9 +24,55 @@ export const TimeSelectorBar: React.FC<TimeSelectorBarProps> = ({
   isLive,
   onResetToLive,
 }) => {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(true);
+  const [showSwipeHint, setShowSwipeHint] = useState(false);
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
+
+  // Restore user manual preference for open/closed state (default true)
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('khaali:timeSelectorOpen');
+      if (stored !== null) {
+        setIsOpen(stored === 'true');
+      }
+    } catch {
+      // Ignore
+    }
+  }, []);
+
+  // Check if first-time swipe hint should be displayed
+  useEffect(() => {
+    try {
+      const seen = localStorage.getItem('khaali:swipeHintSeen');
+      if (!seen) {
+        setShowSwipeHint(true);
+      }
+    } catch {
+      // Ignore
+    }
+  }, []);
+
+  const dismissSwipeHint = () => {
+    setShowSwipeHint(false);
+    try {
+      localStorage.setItem('khaali:swipeHintSeen', 'true');
+    } catch {
+      // Ignore
+    }
+  };
+
+  const toggleOpen = () => {
+    setIsOpen(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('khaali:timeSelectorOpen', String(next));
+      } catch {
+        // Ignore
+      }
+      return next;
+    });
+  };
 
   const activePeriod = periods.find(p => p.index === selectedPeriod) || periods[0];
   const dayLabel = DAY_LABELS[selectedDay] || 'MON';
@@ -48,6 +94,7 @@ export const TimeSelectorBar: React.FC<TimeSelectorBarProps> = ({
 
     // Threshold >40px and predominantly horizontal (|deltaX| > |deltaY| * 1.2)
     if (Math.abs(deltaX) > 40 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2) {
+      dismissSwipeHint();
       if (deltaX < 0) {
         // Swiped Left -> Advance
         if (selectedPeriod < periods.length) {
@@ -70,6 +117,24 @@ export const TimeSelectorBar: React.FC<TimeSelectorBarProps> = ({
 
   return (
     <div className="my-2 border border-hairline bg-cell-bg select-none">
+      {/* First-Time Mobile Swipe Hint */}
+      {showSwipeHint && (
+        <div className="flex items-center justify-between px-3 py-1.5 bg-board-case/80 border-b border-hairline text-muted font-mono text-[11px] animate-in fade-in">
+          <div className="flex items-center gap-1.5">
+            <span className="text-signal" aria-hidden="true">⇄</span>
+            <span>Swipe ← → to change period</span>
+          </div>
+          <button
+            type="button"
+            onClick={dismissSwipeHint}
+            aria-label="Dismiss swipe hint"
+            className="text-[10px] text-muted hover:text-cell-ink px-1.5 py-0.5 border border-hairline/60 bg-cell-bg uppercase ml-2 focus:outline-none"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Collapsed Bar: Minimum 44px tap target with touch swipe support */}
       <div
         onTouchStart={handleTouchStart}
@@ -80,7 +145,7 @@ export const TimeSelectorBar: React.FC<TimeSelectorBarProps> = ({
           type="button"
           aria-expanded={isOpen}
           aria-label="Change day and period (swipe left/right to cycle)"
-          onClick={() => setIsOpen(prev => !prev)}
+          onClick={toggleOpen}
           className="flex-1 flex items-center gap-2 sm:gap-2.5 text-left font-mono text-xs sm:text-sm text-cell-ink hover:text-signal transition-colors focus:outline-none min-h-[44px]"
         >
           <span className="font-bold text-cell-ink bg-board-case px-2 py-0.5 border border-hairline uppercase">
@@ -136,7 +201,6 @@ export const TimeSelectorBar: React.FC<TimeSelectorBarProps> = ({
               selectedPeriod={selectedPeriod}
               onSelectPeriod={(p) => {
                 onSelectPeriod(p);
-                setIsOpen(false); // Automatically collapse once period selected for fast UX
               }}
             />
           </div>

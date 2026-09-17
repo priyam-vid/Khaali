@@ -158,3 +158,25 @@ export function detectCurrentPeriod(
     istTime: ist
   };
 }
+
+/**
+ * Formats elapsed duration from a past timestamp relative to referenceDate.
+ * E.g. "just now", "5m ago", "2h ago", "1d ago".
+ */
+export function formatRelativeTime(
+  timestamp: number,
+  referenceDate: Date = new Date()
+): string {
+  if (!timestamp || isNaN(timestamp)) return '';
+  const diffMs = Math.max(0, referenceDate.getTime() - timestamp);
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHours = Math.floor(diffMin / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMin < 1) return 'just now';
+  if (diffHours < 1) return `${diffMin}m ago`;
+  if (diffDays < 1) return `${diffHours}h ago`;
+  return `${diffDays}d ago`;
+}
+
