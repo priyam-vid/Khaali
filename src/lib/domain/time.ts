@@ -180,3 +180,10 @@ export function formatRelativeTime(
   return `${diffDays}d ago`;
 }
 
+export const DAY_THEME_START_MINUTES = 6 * 60; // 06:00 IST
+export const DAY_THEME_END_MINUTES = 18 * 60; // 18:00 IST
+
+export function isDaytime(minutesSinceMidnight: number): boolean {
+  return minutesSinceMidnight >= DAY_THEME_START_MINUTES && minutesSinceMidnight < DAY_THEME_END_MINUTES;
+}
+

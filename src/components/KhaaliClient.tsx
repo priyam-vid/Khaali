@@ -2,14 +2,13 @@
 
 import React, { useState, useEffect, useMemo, useCallback, Suspense, lazy } from 'react';
 import { KhaaliInitialData } from '@/lib/domain/types';
-import { formatRelativeTime } from '@/lib/domain/time';
+import { formatRelativeTime, isDaytime } from '@/lib/domain/time';
 import { HeroAnswer } from './HeroAnswer';
 import { RoomRow } from './RoomRow';
 import { FilterChips } from './FilterChips';
 import { TimeSelectorBar } from './TimeSelectorBar';
 import { StatusBanner } from './StatusBanner';
 import { MyGapCard } from './MyGapCard';
-import { useTheme } from '@/hooks/useTheme';
 import { useTimetableData } from '@/hooks/useTimetableData';
 import { useTimeNavigation } from '@/hooks/useTimeNavigation';
 import { useVacancy } from '@/hooks/useVacancy';
@@ -57,8 +56,29 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [neverScheduledOpen, setNeverScheduledOpen] = useState(false);
 
-  // 1. Theme hook
-  const { theme, setThemeMode } = useTheme();
+  // 1. Theme mode state ('auto' | 'dark' | 'light')
+  const [themeMode, setThemeModeState] = useState<'auto' | 'dark' | 'light'>('auto');
+
+  useEffect(() => {
+    try {
+      const savedTheme = localStorage.getItem('khaali_theme');
+      if (savedTheme === 'dark' || savedTheme === 'light') {
+        setThemeModeState(savedTheme);
+      }
+      // Anything else (no stored value, or a stored 'auto') keeps the default 'auto' mode.
+    } catch {
+      // Ignore
+    }
+  }, []);
+
+  const handleSetThemeMode = (mode: 'auto' | 'dark' | 'light') => {
+    setThemeModeState(mode);
+    try {
+      localStorage.setItem('khaali_theme', mode);
+    } catch {
+      // Ignore
+    }
+  };
 
   // 2. Timetable data hook (data, substitutions, occupancy store, batch/prof lists)
   const {
@@ -97,6 +117,18 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
     }, []),
     isModalOpen: isSearchOpen || isShortcutsOpen,
   });
+
+  const resolvedTheme = useMemo<'dark' | 'light'>(() => {
+    if (themeMode === 'auto') {
+      return isDaytime(istInfo.minutesSinceMidnight) ? 'light' : 'dark';
+    }
+    return themeMode;
+  }, [themeMode, istInfo]);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('light', resolvedTheme === 'light');
+    document.documentElement.classList.toggle('dark', resolvedTheme === 'dark');
+  }, [resolvedTheme]);
 
   // 4. Vacancy evaluation hook (O(1) schedule lookups, filtering, hero room)
   const {
@@ -173,14 +205,14 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
                     ?
                   </button>
 
-                  {/* Explicit DAY / NIGHT Theme Switch */}
+                  {/* NIGHT | AUTO | DAY Theme Switch */}
                   <div className="flex items-center border border-hairline bg-page-bg font-mono text-xs">
                     <button
                       type="button"
-                      aria-pressed={theme === 'dark'}
-                      onClick={() => setThemeMode('dark')}
+                      aria-pressed={themeMode === 'dark'}
+                      onClick={() => handleSetThemeMode('dark')}
                       className={`px-2.5 py-1 font-bold uppercase transition-colors ${
-                        theme === 'dark'
+                        themeMode === 'dark'
                           ? 'bg-board-case text-signal border-b-2 border-signal'
                           : 'text-muted hover:text-cell-ink'
                       }`}
@@ -190,10 +222,24 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
                     <span className="w-px h-3.5 bg-hairline shrink-0" aria-hidden="true" />
                     <button
                       type="button"
-                      aria-pressed={theme === 'light'}
-                      onClick={() => setThemeMode('light')}
+                      title="Follows real campus time: DAY 06:00-18:00 IST, NIGHT otherwise"
+                      aria-pressed={themeMode === 'auto'}
+                      onClick={() => handleSetThemeMode('auto')}
                       className={`px-2.5 py-1 font-bold uppercase transition-colors ${
-                        theme === 'light'
+                        themeMode === 'auto'
+                          ? 'bg-board-case text-signal border-b-2 border-signal'
+                          : 'text-muted hover:text-cell-ink'
+                      }`}
+                    >
+                      AUTO
+                    </button>
+                    <span className="w-px h-3.5 bg-hairline shrink-0" aria-hidden="true" />
+                    <button
+                      type="button"
+                      aria-pressed={themeMode === 'light'}
+                      onClick={() => handleSetThemeMode('light')}
+                      className={`px-2.5 py-1 font-bold uppercase transition-colors ${
+                        themeMode === 'light'
                           ? 'bg-board-case text-signal border-b-2 border-signal'
                           : 'text-muted hover:text-cell-ink'
                       }`}

@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { detectCurrentPeriod, getISTTimeInfo, formatRelativeTime } from '../../src/lib/domain/time';
+import {
+  detectCurrentPeriod,
+  getISTTimeInfo,
+  formatRelativeTime,
+  isDaytime,
+  DAY_THEME_START_MINUTES,
+  DAY_THEME_END_MINUTES,
+} from '../../src/lib/domain/time';
 import { Period } from '../../src/lib/domain/rooms';
 
 describe('Time Engine & Period Detection', () => {
@@ -125,6 +132,33 @@ describe('Time Engine & Period Detection', () => {
     it('handles zero or NaN timestamps gracefully', () => {
       expect(formatRelativeTime(0, baseNow)).toBe('');
       expect(formatRelativeTime(NaN, baseNow)).toBe('');
+    });
+  });
+
+  describe('isDaytime & theme calculation', () => {
+    it('returns false just before 06:00 IST', () => {
+      expect(isDaytime(5 * 60 + 59)).toBe(false); // 05:59 IST
+    });
+
+    it('returns true exactly at 06:00 IST', () => {
+      expect(isDaytime(DAY_THEME_START_MINUTES)).toBe(true); // 06:00 IST (360)
+    });
+
+    it('returns true during mid-afternoon', () => {
+      expect(isDaytime(14 * 60 + 30)).toBe(true); // 14:30 IST (870)
+    });
+
+    it('returns true just before 18:00 IST', () => {
+      expect(isDaytime(DAY_THEME_END_MINUTES - 1)).toBe(true); // 17:59 IST (1079)
+    });
+
+    it('returns false exactly at 18:00 IST', () => {
+      expect(isDaytime(DAY_THEME_END_MINUTES)).toBe(false); // 18:00 IST (1080)
+    });
+
+    it('returns false at midnight and late night', () => {
+      expect(isDaytime(0)).toBe(false); // 00:00 IST
+      expect(isDaytime(23 * 60 + 45)).toBe(false); // 23:45 IST
     });
   });
 });
