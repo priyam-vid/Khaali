@@ -1,47 +1,33 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Period, Room, Occupancy, DayIndex } from '@/lib/domain/rooms';
-import { createOccupancyStore } from '@/lib/domain/occupancy';
-import { evaluateVacancy, ExtendedFreeRun } from '@/lib/domain/vacancy';
-import { detectCurrentPeriod, getISTTimeInfo, formatRelativeTime } from '@/lib/domain/time';
-import { applySubstitutions, SubstitutionChange } from '@/lib/edupage/substitutions';
+import React, { useState, useEffect, useMemo, useCallback, Suspense, lazy } from 'react';
+import { KhaaliInitialData } from '@/lib/domain/types';
+import { formatRelativeTime } from '@/lib/domain/time';
 import { HeroAnswer } from './HeroAnswer';
 import { RoomRow } from './RoomRow';
-import { FilterChips, FilterBuilding } from './FilterChips';
+import { FilterChips } from './FilterChips';
 import { TimeSelectorBar } from './TimeSelectorBar';
 import { StatusBanner } from './StatusBanner';
 import { MyGapCard } from './MyGapCard';
-import { SearchModal } from './SearchModal';
-import { KeyboardShortcutsModal } from './KeyboardShortcutsModal';
+import { useTheme } from '@/hooks/useTheme';
+import { useTimetableData } from '@/hooks/useTimetableData';
+import { useTimeNavigation } from '@/hooks/useTimeNavigation';
+import { useVacancy } from '@/hooks/useVacancy';
 
-export interface KhaaliInitialData {
-  periods: Period[];
-  rooms: Room[];
-  occupancies: Occupancy[];
-  validityWindow?: {
-    startDate: string;
-    endDate: string;
-  };
-  fetchedAt: number;
-  fromFallback: boolean;
-}
+// Re-export domain type for backward compatibility
+export type { KhaaliInitialData } from '@/lib/domain/types';
+
+// Lazy-load modal dialogs to reduce critical initial bundle size
+const SearchModal = lazy(() =>
+  import('./SearchModal').then(m => ({ default: m.SearchModal }))
+);
+const KeyboardShortcutsModal = lazy(() =>
+  import('./KeyboardShortcutsModal').then(m => ({ default: m.KeyboardShortcutsModal }))
+);
 
 interface KhaaliClientProps {
   initialData: KhaaliInitialData;
 }
-
-const DAY_MAP: Record<string, DayIndex> = {
-  mon: 0,
-  tue: 1,
-  wed: 2,
-  thu: 3,
-  fri: 4,
-  sat: 5,
-};
-
-const DAY_CODES = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
-const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 function parseDateFromDDMMYYYY(dateStr: string): Date | null {
   const parts = dateStr.split('/');
@@ -66,18 +52,71 @@ function checkOutsideValidityWindow(
 }
 
 export function KhaaliClient({ initialData }: KhaaliClientProps) {
-  const [data, setData] = useState<KhaaliInitialData>(initialData);
-  const [isStaleData, setIsStaleData] = useState<boolean>(initialData.fromFallback);
-  const [substitutions, setSubstitutions] = useState<SubstitutionChange[]>([]);
+  // Modal visibility states
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const [neverScheduledOpen, setNeverScheduledOpen] = useState(false);
 
-  // Screen reader live announcement for day/period selection
-  const [announcement, setAnnouncement] = useState('');
-  const isMountedRef = React.useRef(false);
+  // 1. Theme hook
+  const { theme, setThemeMode } = useTheme();
 
-  // Theme state: dark default, supports manual toggle & prefers-color-scheme
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  // 2. Timetable data hook (data, substitutions, occupancy store, batch/prof lists)
+  const {
+    periods,
+    rooms,
+    validityWindow,
+    fetchedAt,
+    isStaleData,
+    effectiveOccupancies,
+    occupancyStore,
+    allBatches,
+    allProfessors,
+  } = useTimetableData(initialData);
+
+  // 3. Time navigation hook (minute-gated clock, period/day selection, URL sync, shortcuts)
+  const {
+    now,
+    istInfo,
+    detection,
+    selectedDay,
+    selectedPeriod,
+    selectedBuilding,
+    setSelectedBuilding,
+    isLive,
+    announcement,
+    handleResetToLive,
+    handleSelectDay,
+    handleSelectPeriod,
+  } = useTimeNavigation({
+    periods,
+    onOpenSearch: useCallback(() => setIsSearchOpen(true), []),
+    onToggleShortcuts: useCallback(() => setIsShortcutsOpen(prev => !prev), []),
+    onCloseModals: useCallback(() => {
+      setIsSearchOpen(false);
+      setIsShortcutsOpen(false);
+    }, []),
+    isModalOpen: isSearchOpen || isShortcutsOpen,
+  });
+
+  // 4. Vacancy evaluation hook (O(1) schedule lookups, filtering, hero room)
+  const {
+    evaluation,
+    filteredRuns,
+    buildingCounts,
+    filteredNeverScheduled,
+    heroRoom,
+    heroSchedule,
+    remainingRooms,
+    getRoomPriorAndNext,
+  } = useVacancy({
+    selectedDay,
+    selectedPeriod,
+    selectedBuilding,
+    rooms,
+    periods,
+    occupancyStore,
+    effectiveOccupancies,
+  });
 
   // Register PWA Service Worker in production
   useEffect(() => {
@@ -86,395 +125,10 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
     }
   }, []);
 
-  // Theme Initialization & Sync
-  useEffect(() => {
-    try {
-      const savedTheme = localStorage.getItem('khaali_theme') as 'dark' | 'light' | null;
-      if (savedTheme) {
-        setTheme(savedTheme);
-        document.documentElement.classList.toggle('light', savedTheme === 'light');
-        document.documentElement.classList.toggle('dark', savedTheme === 'dark');
-      } else if (window.matchMedia('(prefers-color-scheme: light)').matches) {
-        setTheme('light');
-        document.documentElement.classList.add('light');
-        document.documentElement.classList.remove('dark');
-      } else {
-        setTheme('dark');
-        document.documentElement.classList.add('dark');
-        document.documentElement.classList.remove('light');
-      }
-    } catch {
-      // Ignore
-    }
-  }, []);
-
-  const setThemeMode = (newTheme: 'dark' | 'light') => {
-    setTheme(newTheme);
-    document.documentElement.classList.toggle('light', newTheme === 'light');
-    document.documentElement.classList.toggle('dark', newTheme === 'dark');
-    try {
-      localStorage.setItem('khaali_theme', newTheme);
-    } catch {
-      // Ignore
-    }
-  };
-
-  // Cache initial payload to localStorage for offline campus Wi-Fi resiliency
-  useEffect(() => {
-    try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        localStorage.setItem('khaali_cached_timetable', JSON.stringify(initialData));
-      }
-    } catch {
-      // Ignore quota errors
-    }
-  }, [initialData]);
-
-  // If initial payload failed upstream, attempt restoring last-known-good from localStorage
-  useEffect(() => {
-    if (initialData.fromFallback) {
-      try {
-        const stored = localStorage.getItem('khaali_cached_timetable');
-        if (stored) {
-          const parsed = JSON.parse(stored) as KhaaliInitialData;
-          if (parsed && parsed.periods && parsed.rooms) {
-            setData(parsed);
-            setIsStaleData(true);
-          }
-        }
-      } catch {
-        // Fallback safely
-      }
-    }
-  }, [initialData.fromFallback]);
-
-  // Fetch near-live substitutions (ISR 300s) on mount
-  useEffect(() => {
-    let cancelled = false;
-    async function loadSubstitutions() {
-      try {
-        const res = await fetch('/api/substitutions');
-        if (!res.ok) return;
-        const json = await res.json();
-        if (!cancelled && json && Array.isArray(json.substitutions)) {
-          setSubstitutions(json.substitutions);
-        }
-      } catch {
-        // Safe offline silent catch
-      }
-    }
-
-    loadSubstitutions();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const { periods, rooms, occupancies, validityWindow, fetchedAt } = data;
-
-  // Merge today's substitutions if active
-  const effectiveOccupancies = useMemo(() => {
-    if (substitutions.length === 0) return occupancies;
-    const ist = getISTTimeInfo();
-    const day = (ist.dayIndex ?? 0) as DayIndex;
-    return applySubstitutions(occupancies, substitutions, rooms, day);
-  }, [occupancies, substitutions, rooms]);
-
-  // Occupancy store with O(1) indexed lookups
-  const occupancyStore = useMemo(() => createOccupancyStore(effectiveOccupancies), [effectiveOccupancies]);
-
-  // Derive unique batches & teachers for search and gap tracking
-  const allBatches = useMemo(() => {
-    const set = new Set<string>();
-    for (const occ of occupancies) {
-      for (const b of occ.batchNames) {
-        if (b) set.add(b);
-      }
-    }
-    return Array.from(set).sort();
-  }, [occupancies]);
-
-  const allProfessors = useMemo(() => {
-    const set = new Set<string>();
-    for (const occ of occupancies) {
-      for (const t of occ.teacherNames) {
-        if (t) set.add(t);
-      }
-    }
-    return Array.from(set).sort();
-  }, [occupancies]);
-
-  // Current system / IST state
-  const [now, setNow] = useState<Date>(() => new Date());
-  const istInfo = useMemo(() => getISTTimeInfo(now), [now]);
-  const detection = useMemo(() => detectCurrentPeriod(periods, now), [periods, now]);
-
-  // Check if current date is outside validity window
+  // Validity and hours checks
   const isOutsideValidity = useMemo(() => {
     return checkOutsideValidityWindow(now, validityWindow);
   }, [now, validityWindow]);
-
-  // Selected Day, Period, and Building states
-  const [selectedDay, setSelectedDay] = useState<DayIndex>(() => detection.dayIndex ?? 0);
-  const [selectedPeriod, setSelectedPeriod] = useState<number>(() => detection.activePeriodIndex);
-  const [selectedBuilding, setSelectedBuilding] = useState<FilterBuilding>('ALL');
-  const [isManualTime, setIsManualTime] = useState(false);
-  const [neverScheduledOpen, setNeverScheduledOpen] = useState(false);
-
-  // Deep Link Query Parameter Parsing on Client Mount
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const params = new URLSearchParams(window.location.search);
-    const dayParam = params.get('day')?.toLowerCase();
-    const periodParam = params.get('period');
-    const buildingParam = params.get('building')?.toUpperCase();
-
-    let manual = false;
-
-    if (dayParam && dayParam in DAY_MAP) {
-      setSelectedDay(DAY_MAP[dayParam]);
-      manual = true;
-    }
-
-    if (periodParam) {
-      const pNum = parseInt(periodParam, 10);
-      if (pNum >= 1 && pNum <= periods.length) {
-        setSelectedPeriod(pNum);
-        manual = true;
-      }
-    }
-
-    if (buildingParam && ['ALL', 'EB', 'FB', 'SVH', 'LAW'].includes(buildingParam)) {
-      setSelectedBuilding(buildingParam as FilterBuilding);
-    }
-
-    if (manual) {
-      setIsManualTime(true);
-    }
-  }, [periods.length]);
-
-  // Live IST Clock ticking (every 1 second)
-  useEffect(() => {
-    const clockTimer = setInterval(() => {
-      setNow(new Date());
-    }, 1000);
-    return () => clearInterval(clockTimer);
-  }, []);
-
-  // 30-Second Re-Evaluation Interval: automatically roll over period when live
-  useEffect(() => {
-    const reEvalTimer = setInterval(() => {
-      const currentNow = new Date();
-      const newDetection = detectCurrentPeriod(periods, currentNow);
-
-      if (!isManualTime) {
-        if (newDetection.dayIndex !== null) {
-          setSelectedDay(newDetection.dayIndex);
-        }
-        setSelectedPeriod(newDetection.activePeriodIndex);
-      }
-    }, 30000);
-
-    return () => clearInterval(reEvalTimer);
-  }, [periods, isManualTime]);
-
-  // Auto-sync initial detection once client mounts if no deep link was provided
-  useEffect(() => {
-    if (!isManualTime) {
-      if (detection.dayIndex !== null) {
-        setSelectedDay(detection.dayIndex);
-      }
-      setSelectedPeriod(detection.activePeriodIndex);
-    }
-  }, [detection, isManualTime]);
-
-  const isLive =
-    !isManualTime &&
-    selectedDay === (detection.dayIndex ?? 0) &&
-    selectedPeriod === detection.activePeriodIndex;
-
-  const handleResetToLive = () => {
-    setIsManualTime(false);
-    if (detection.dayIndex !== null) {
-      setSelectedDay(detection.dayIndex);
-    }
-    setSelectedPeriod(detection.activePeriodIndex);
-  };
-
-  const handleSelectDay = (day: DayIndex) => {
-    setIsManualTime(true);
-    setSelectedDay(day);
-  };
-
-  const handleSelectPeriod = (periodIndex: number) => {
-    setIsManualTime(true);
-    setSelectedPeriod(periodIndex);
-  };
-
-  // Global Keyboard Navigation
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (
-        target &&
-        (target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.tagName === 'SELECT' ||
-          target.isContentEditable ||
-          Boolean(target.closest?.('[contenteditable="true"]')))
-      ) {
-        return;
-      }
-
-      if (e.key === '?') {
-        e.preventDefault();
-        setIsShortcutsOpen(prev => !prev);
-        return;
-      }
-
-      if (e.key === 'Escape') {
-        if (isShortcutsOpen) {
-          setIsShortcutsOpen(false);
-          return;
-        }
-        if (isSearchOpen) {
-          setIsSearchOpen(false);
-          return;
-        }
-      }
-
-      // If any dialog is open, do not hijack arrows or search key
-      if (isSearchOpen || isShortcutsOpen) {
-        return;
-      }
-
-      if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        setIsManualTime(true);
-        setSelectedDay(prev => ((prev + 5) % 6) as DayIndex);
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        setIsManualTime(true);
-        setSelectedDay(prev => ((prev + 1) % 6) as DayIndex);
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setIsManualTime(true);
-        setSelectedPeriod(prev => Math.max(1, prev - 1));
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setIsManualTime(true);
-        setSelectedPeriod(prev => Math.min(periods.length, prev + 1));
-      } else if (e.key === '/') {
-        e.preventDefault();
-        setIsSearchOpen(true);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [periods.length, isSearchOpen, isShortcutsOpen]);
-
-  // Sync address bar URL seamlessly when filters or slots change
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (!isManualTime && selectedBuilding === 'ALL') return;
-    const dayCode = DAY_CODES[selectedDay] || 'mon';
-    const currentParams = new URLSearchParams(window.location.search);
-    currentParams.set('day', dayCode);
-    currentParams.set('period', String(selectedPeriod));
-    currentParams.set('building', selectedBuilding);
-    const newUrl = `${window.location.pathname}?${currentParams.toString()}`;
-    window.history.replaceState(window.history.state, '', newUrl);
-  }, [selectedDay, selectedPeriod, selectedBuilding, isManualTime]);
-
-  // Screen reader live announcement for day/period changes
-  useEffect(() => {
-    if (!isMountedRef.current) {
-      isMountedRef.current = true;
-      return;
-    }
-    const dayName = DAY_NAMES[selectedDay] || 'Monday';
-    setAnnouncement(`${dayName}, Period ${selectedPeriod} selected`);
-  }, [selectedDay, selectedPeriod]);
-
-  // Evaluate vacancy for selected day & period
-  const evaluation = useMemo(() => {
-    return evaluateVacancy(
-      selectedDay,
-      selectedPeriod,
-      rooms,
-      periods,
-      occupancyStore
-    );
-  }, [selectedDay, selectedPeriod, rooms, periods, occupancyStore]);
-
-  // Filter ranked runs by selected building
-  const filteredRuns = useMemo(() => {
-    if (selectedBuilding === 'ALL') {
-      return evaluation.rankedRuns;
-    }
-    return evaluation.rankedRuns.filter(r => r.room.building === selectedBuilding);
-  }, [evaluation.rankedRuns, selectedBuilding]);
-
-  // Count vacant rooms per building for filter badges
-  const buildingCounts = useMemo(() => {
-    const counts: Partial<Record<FilterBuilding, number>> = {
-      ALL: evaluation.rankedRuns.length,
-      EB: 0,
-      FB: 0,
-      SVH: 0,
-      LAW: 0,
-    };
-    for (const run of evaluation.rankedRuns) {
-      const b = run.room.building;
-      if (b in counts) {
-        counts[b] = (counts[b] || 0) + 1;
-      }
-    }
-    return counts;
-  }, [evaluation.rankedRuns]);
-
-  // Filter never-scheduled rooms by building
-  const filteredNeverScheduled = useMemo(() => {
-    if (selectedBuilding === 'ALL') {
-      return evaluation.neverScheduledRooms;
-    }
-    return evaluation.neverScheduledRooms.filter(r => r.building === selectedBuilding);
-  }, [evaluation.neverScheduledRooms, selectedBuilding]);
-
-  // Prior and next class lookup helper for desktop hover inspection
-  const getRoomPriorAndNext = useCallback(
-    (roomId: string, endPeriod: number) => {
-      const todayClasses = effectiveOccupancies
-        .filter(occ => occ.day === selectedDay && occ.roomId === roomId)
-        .sort((a, b) => a.period - b.period);
-
-      const prevClass = todayClasses.filter(c => c.period < selectedPeriod).pop() || null;
-      const nextClass = todayClasses.find(c => c.period > endPeriod) || null;
-
-      return { prevClass, nextClass };
-    },
-    [effectiveOccupancies, selectedDay, selectedPeriod]
-  );
-
-  // Hero room: first of filtered results
-  const heroRoom: ExtendedFreeRun | null = useMemo(() => {
-    if (filteredRuns.length === 0) return null;
-    return filteredRuns[0];
-  }, [filteredRuns]);
-
-  // Hero room prior/next schedule
-  const heroSchedule = useMemo(() => {
-    if (!heroRoom) return { prevClass: null, nextClass: null };
-    return getRoomPriorAndNext(heroRoom.roomId, heroRoom.endPeriod);
-  }, [heroRoom, getRoomPriorAndNext]);
-
-  // Rooms list excluding the hero answer
-  const remainingRooms = useMemo(() => {
-    if (!heroRoom) return [];
-    return filteredRuns.filter(r => r.roomId !== heroRoom.roomId);
-  }, [filteredRuns, heroRoom]);
 
   const isSunday = istInfo.dayIndex === null && isLive;
   const isBeforeHours = detection.state === 'BEFORE_HOURS' && isLive;
@@ -482,6 +136,14 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
 
   return (
     <div className="min-h-screen bg-page-bg text-cell-ink selection:bg-brand selection:text-white flex flex-col justify-between">
+      {/* Keyboard Accessibility Skip Link */}
+      <a
+        href="#main-board"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-3 focus:py-2 focus:bg-signal focus:text-page-bg focus:font-mono focus:font-bold border border-hairline"
+      >
+        SKIP TO VACANCY BOARD
+      </a>
+
       {/* Top Outer Shell */}
       <div className="max-w-desktop w-full mx-auto p-3 sm:p-5 lg:p-6">
         {/* Responsive Layout: Desktop 2-Column Grid / Mobile Single Column */}
@@ -651,7 +313,7 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
           {/* ========================================================================= */}
           {/* RIGHT MAIN PANE (The Solari Departure Board) */}
           {/* ========================================================================= */}
-          <main className="flex-1 min-w-0 w-full">
+          <main className="flex-1 min-w-0 w-full" id="main-board">
             {/* Screen reader live announcement for day/period selection */}
             <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
               {announcement}
@@ -804,24 +466,31 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
         </div>
       </footer>
 
-      {/* Faculty & Room Search / Inquiry Dialog */}
-      <SearchModal
-        isOpen={isSearchOpen}
-        onClose={() => setIsSearchOpen(false)}
-        day={selectedDay}
-        currentPeriod={selectedPeriod}
-        periods={periods}
-        rooms={rooms}
-        occupancies={effectiveOccupancies}
-        allProfessors={allProfessors}
-      />
+      {/* Faculty & Room Search / Inquiry Dialog (Lazy Loaded) */}
+      <Suspense fallback={null}>
+        {isSearchOpen && (
+          <SearchModal
+            isOpen={isSearchOpen}
+            onClose={() => setIsSearchOpen(false)}
+            day={selectedDay}
+            currentPeriod={selectedPeriod}
+            periods={periods}
+            rooms={rooms}
+            occupancies={effectiveOccupancies}
+            allProfessors={allProfessors}
+          />
+        )}
+      </Suspense>
 
-      {/* Keyboard & Gesture Shortcuts Guide Modal */}
-      <KeyboardShortcutsModal
-        isOpen={isShortcutsOpen}
-        onClose={() => setIsShortcutsOpen(false)}
-      />
+      {/* Keyboard & Gesture Shortcuts Guide Modal (Lazy Loaded) */}
+      <Suspense fallback={null}>
+        {isShortcutsOpen && (
+          <KeyboardShortcutsModal
+            isOpen={isShortcutsOpen}
+            onClose={() => setIsShortcutsOpen(false)}
+          />
+        )}
+      </Suspense>
     </div>
   );
 }
-

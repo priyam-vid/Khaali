@@ -1,4 +1,4 @@
-const CACHE_NAME = 'khaali-v1';
+const CACHE_NAME = 'khaali-v2';
 const STATIC_SHELL = [
   '/',
   '/manifest.webmanifest',

@@ -24,12 +24,27 @@ export const SearchModal: React.FC<SearchModalProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'professors' | 'rooms'>('professors');
   const [query, setQuery] = useState('');
-  const [selectedProf, setSelectedProf] = useState<string>('Mr. Vikas Singh');
+  const [selectedProf, setSelectedProf] = useState<string>(() => allProfessors[0] || '');
   const [selectedRoomId, setSelectedRoomId] = useState<string>('');
 
   const modalRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const triggerRef = useRef<Element | null>(null);
+
+  // Auto-select first room or EB 305 if available
+  useEffect(() => {
+    if (!selectedRoomId && rooms.length > 0) {
+      const eb305 = rooms.find(r => r.short.includes('305') || r.name.includes('305'));
+      setSelectedRoomId(eb305 ? eb305.id : rooms[0].id);
+    }
+  }, [rooms, selectedRoomId]);
+
+  // Auto-select first professor if none selected
+  useEffect(() => {
+    if (!selectedProf && allProfessors.length > 0) {
+      setSelectedProf(allProfessors[0]);
+    }
+  }, [allProfessors, selectedProf]);
 
   // History back-button integration
   const handleClose = useCallback(() => {
@@ -105,14 +120,6 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     };
   }, [isOpen, onClose, handleClose]);
 
-  // Auto-select first room or EB 305 if available
-  useMemo(() => {
-    if (!selectedRoomId && rooms.length > 0) {
-      const eb305 = rooms.find(r => r.short.includes('305') || r.name.includes('305'));
-      setSelectedRoomId(eb305 ? eb305.id : rooms[0].id);
-    }
-  }, [rooms, selectedRoomId]);
-
   if (!isOpen) return null;
 
   // Filtered professors list
@@ -148,7 +155,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
       onClick={(e) => {
         if (e.target === e.currentTarget) handleClose();
       }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/85 backdrop-blur-xs"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/90"
     >
       <div
         ref={modalRef}

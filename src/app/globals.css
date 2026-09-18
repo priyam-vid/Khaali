@@ -2,21 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
-@font-face {
-  font-family: 'Departure Mono';
-  src: url('/fonts/DepartureMono-Regular.woff2') format('woff2');
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
 :root {
   /* Night Board (Default Dark) */
   --page-bg: #0D0D0F;
   --board-case: #17181B;
   --cell-bg: #1E1F22;
   --cell-ink: #EDE6D6;
-  --muted: #8A8D92;
+  --muted: #A3A6AA;
   --hairline: #2A2B2F;
   --signal: #E8A33D;
   --unlit: #4A4C52;
@@ -73,7 +65,6 @@ body {
 
 .flap-animate {
   animation: flap-flip 180ms cubic-bezier(0.4, 0, 0.2, 1);
-  transform-style: preserve-3d;
   backface-visibility: hidden;
 }
 

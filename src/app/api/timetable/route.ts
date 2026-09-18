@@ -118,11 +118,12 @@ export async function GET() {
         'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400'
       }
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
     console.error('Fatal timetable route failure:', err);
     return NextResponse.json({
       error: 'Failed to load timetable',
-      message: err?.message || String(err)
+      message
     }, { status: 500 });
   }
 }

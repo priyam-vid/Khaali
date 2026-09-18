@@ -3,10 +3,11 @@ import path from 'node:path';
 import { parseTimetable } from '@/lib/edupage/parse';
 import { buildOccupancies } from '@/lib/domain/occupancy';
 import { OverridesConfig } from '@/lib/domain/rooms';
-import { KhaaliClient, KhaaliInitialData } from '@/components/KhaaliClient';
+import { KhaaliClient } from '@/components/KhaaliClient';
+import { KhaaliInitialData } from '@/lib/domain/types';
 import { getPersistedTimetable, isStoreStale } from '@/lib/storage/timetable-store';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 300;
 
 async function loadInitialTimetable(): Promise<KhaaliInitialData> {
   try {

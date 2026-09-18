@@ -26,7 +26,8 @@ export const maxDuration = 60; // Allow up to 60s for full upstream scrape
 
 function isAuthorized(request: NextRequest): boolean {
   const cronSecret = process.env.CRON_SECRET;
-  const debugKey = process.env.DEBUG_KEY || 'khaali-debug';
+  const isProd = process.env.NODE_ENV === 'production';
+  const debugKey = process.env.DEBUG_KEY || (isProd ? undefined : 'khaali-debug');
 
   // 1. Check Vercel Cron Authorization header (Bearer token)
   const authHeader = request.headers.get('authorization');
@@ -37,13 +38,13 @@ function isAuthorized(request: NextRequest): boolean {
   // 2. Check query parameter ?key=... for manual debug triggers
   const { searchParams } = new URL(request.url);
   const paramKey = searchParams.get('key');
-  if (paramKey && (paramKey === debugKey || (cronSecret && paramKey === cronSecret))) {
+  if (paramKey && ((debugKey && paramKey === debugKey) || (cronSecret && paramKey === cronSecret))) {
     return true;
   }
 
   // 3. Check custom header x-debug-key
   const customHeader = request.headers.get('x-debug-key');
-  if (customHeader && (customHeader === debugKey || (cronSecret && customHeader === cronSecret))) {
+  if (customHeader && ((debugKey && customHeader === debugKey) || (cronSecret && customHeader === cronSecret))) {
     return true;
   }
 
@@ -131,11 +132,12 @@ async function handleSync(request: NextRequest) {
         substitutions: substitutions.length
       }
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
     console.error('Cron synchronization fatal error:', err);
     return NextResponse.json({
       status: 'error',
-      message: err?.message || String(err)
+      message
     }, { status: 500 });
   }
 }

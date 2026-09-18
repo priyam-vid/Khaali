@@ -45,6 +45,7 @@ export const RawLessonSchema = z.object({
   id: z.string(),
   subjectid: z.string().optional().default(''),
   teacherids: z.array(z.string()).optional().default([]),
+  classroomids: z.array(z.string()).optional().default([]),
   groupids: z.array(z.string()).optional().default([]),
   classids: z.array(z.string()).optional().default([]),
   durationperiods: z.number().optional().default(1),

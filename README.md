@@ -6,7 +6,7 @@
 [![React 19](https://img.shields.io/badge/React-19-blue?style=flat&logo=react)](https://react.dev/)
 [![TypeScript Strict](https://img.shields.io/badge/TypeScript-Strict-3178C6?style=flat&logo=typescript)](https://www.typescriptlang.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-CSS-38B2AC?style=flat&logo=tailwind-css)](https://tailwindcss.com/)
-[![Vitest](https://img.shields.io/badge/Tests-35%20Passed-FCC72B?style=flat&logo=vitest)](https://vitest.dev/)
+[![Vitest](https://img.shields.io/badge/Tests-54%20Passed-FCC72B?style=flat&logo=vitest)](https://vitest.dev/)
 
 ---
 
@@ -203,7 +203,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 ```bash
 npm run test
 ```
-Runs 42 tests covering deterministic short room derivations, overrides propagation, group splits (2BCA1 Apple/Dell Lab), multi-period unrolling, IST period detection, and full-period hand verification against the fixture.
+Runs 54 tests covering deterministic short room derivations, overrides propagation, group splits (2BCA1 Apple/Dell Lab), multi-period unrolling, IST period detection, storage resilience, and full-period hand verification against the fixture.
 
 ### 5. Typecheck & Production Build
 ```bash

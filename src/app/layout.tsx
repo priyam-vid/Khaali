@@ -25,13 +25,23 @@ export const metadata: Metadata = {
     title: 'Khaali',
     statusBarStyle: 'black-translucent',
   },
+  openGraph: {
+    title: 'Khaali — IILM Classroom Vacancy Departure Board',
+    description: 'Find vacant classrooms and study spots instantly at IILM University Greater Noida.',
+    type: 'website',
+    url: 'https://khaali.vercel.app',
+    siteName: 'Khaali',
+  },
+  twitter: {
+    card: 'summary',
+    title: 'Khaali — IILM Classroom Vacancy Departure Board',
+    description: 'Find vacant classrooms and study spots instantly at IILM University Greater Noida.',
+  },
 };
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   themeColor: '#0D0D0F',
 };
 

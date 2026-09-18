@@ -38,8 +38,8 @@ export function buildOccupancies(
 
     // Resolve rooms: card.classroomids preferred over lesson fallback
     let roomIds = card.classroomids && card.classroomids.length > 0 ? card.classroomids : [];
-    if (roomIds.length === 0 && (lesson as any)?.classroomids?.length > 0) {
-      roomIds = (lesson as any).classroomids;
+    if (roomIds.length === 0 && lesson?.classroomids && lesson.classroomids.length > 0) {
+      roomIds = lesson.classroomids;
     }
 
     // Resolve subject info

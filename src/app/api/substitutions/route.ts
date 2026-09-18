@@ -70,8 +70,9 @@ export async function GET(request: NextRequest) {
 
       throw fetchErr;
     }
-  } catch (err: any) {
-    console.error('Fatal substitution route error:', err);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('Fatal substitution route error:', message);
     return NextResponse.json({
       substitutions: [],
       error: 'Failed to fetch substitutions',

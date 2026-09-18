@@ -27,7 +27,6 @@ export const HeroAnswer: React.FC<HeroAnswerProps> = ({
   if (isSunday) {
     return (
       <section
-        aria-live="polite"
         className="border border-hairline bg-board-case p-4 my-2.5 text-left"
       >
         <div className="flex items-center gap-2 text-xs font-mono text-muted uppercase mb-1">
@@ -47,7 +46,6 @@ export const HeroAnswer: React.FC<HeroAnswerProps> = ({
   if (noClassesToday) {
     return (
       <section
-        aria-live="polite"
         className="border border-hairline bg-board-case p-4 my-2.5 text-left"
       >
         <div className="flex items-center gap-2 text-xs font-mono text-signal uppercase mb-1">
@@ -67,7 +65,6 @@ export const HeroAnswer: React.FC<HeroAnswerProps> = ({
   if (isBeforeHours) {
     return (
       <section
-        aria-live="polite"
         className="border border-hairline bg-board-case p-4 my-2.5 text-left"
       >
         <div className="flex items-center gap-2 text-xs font-mono text-muted uppercase mb-1">
@@ -89,7 +86,6 @@ export const HeroAnswer: React.FC<HeroAnswerProps> = ({
   if (isAfterHours) {
     return (
       <section
-        aria-live="polite"
         className="border border-hairline bg-board-case p-4 my-2.5 text-left"
       >
         <div className="flex items-center gap-2 text-xs font-mono text-muted uppercase mb-1">
@@ -109,7 +105,6 @@ export const HeroAnswer: React.FC<HeroAnswerProps> = ({
   if (!hero) {
     return (
       <section
-        aria-live="polite"
         className="border border-hairline bg-board-case p-4 my-2.5 text-left"
       >
         <div className="flex items-center gap-2 text-xs font-mono text-muted uppercase mb-1">
@@ -127,7 +122,7 @@ export const HeroAnswer: React.FC<HeroAnswerProps> = ({
   }
 
   return (
-    <section aria-live="polite" className="my-2">
+    <section className="my-2">
       <div className="flex items-center justify-between pb-1.5 px-0.5 text-[11px] font-mono text-muted">
         <span className="flex items-center gap-1.5 text-signal font-bold uppercase tracking-wider">
           <span className="w-2 h-2 bg-signal shrink-0" aria-hidden="true" />

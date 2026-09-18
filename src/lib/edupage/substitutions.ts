@@ -210,22 +210,22 @@ export function applySubstitutions(
     }
   }
 
-  // Filter out cancellations
-  let result = baseOccupancies.filter(occ => {
-    if (occ.day === day && cancelledSlots.has(`${occ.period}:${occ.roomId}`)) {
-      return false; // Removed due to cancellation
-    }
-    return true;
-  });
+  // Filter out cancellations and shallow clone items to prevent mutating baseOccupancies
+  let result: Occupancy[] = baseOccupancies
+    .filter(occ => !(occ.day === day && cancelledSlots.has(`${occ.period}:${occ.roomId}`)))
+    .map(occ => ({ ...occ }));
 
   // Apply swaps
   for (const swap of swaps) {
     if (swap.fromRoomId) {
       // Find matching occupancy to reassign
-      const found = result.find(o => o.day === day && o.period === swap.period && o.roomId === swap.fromRoomId);
-      if (found) {
-        found.roomId = swap.toRoomId;
-        found.source = 'substitution';
+      const foundIndex = result.findIndex(o => o.day === day && o.period === swap.period && o.roomId === swap.fromRoomId);
+      if (foundIndex !== -1) {
+        result[foundIndex] = {
+          ...result[foundIndex],
+          roomId: swap.toRoomId,
+          source: 'substitution'
+        };
       }
     } else {
       // Inject occupied block for new room

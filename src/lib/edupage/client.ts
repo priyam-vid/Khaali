@@ -122,6 +122,7 @@ export async function fetchTTViewer(): Promise<{
   defaultTtId: string;
   timetables: Array<{ tt_num: string; year?: number; text: string; datefrom?: string; hidden?: boolean }>;
 }> {
+  const currentYear = new Date().getFullYear();
   const res = await rpcPost<{
     r?: {
       regular?: {
@@ -129,7 +130,7 @@ export async function fetchTTViewer(): Promise<{
         timetables?: Array<{ tt_num: string; year?: number; text: string; datefrom?: string; hidden?: boolean }>;
       };
     };
-  }>('/timetable/server/ttviewer.js', 'getTTViewerData', [null, 2026]);
+  }>('/timetable/server/ttviewer.js', 'getTTViewerData', [null, currentYear]);
 
   const regular = res.r?.regular;
   const timetables = regular?.timetables || [];

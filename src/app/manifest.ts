@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: 'Find vacant classrooms instantly at IILM University School of Computer Science & Engineering',
     start_url: '/',
     display: 'standalone',
-    background_color: '#0E1014',
-    theme_color: '#0E1014',
+    background_color: '#0D0D0F',
+    theme_color: '#0D0D0F',
     icons: [
       {
         src: '/icon-192.png',

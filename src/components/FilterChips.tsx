@@ -10,12 +10,12 @@ interface FilterChipsProps {
   orientation?: 'horizontal' | 'vertical';
 }
 
-const CHIPS: Array<{ id: FilterBuilding; label: string }> = [
-  { id: 'ALL', label: 'ALL ROOMS' },
-  { id: 'EB', label: 'EB' },
-  { id: 'FB', label: 'FB' },
-  { id: 'SVH', label: 'SVH' },
-  { id: 'LAW', label: 'LAW' },
+const CHIPS: Array<{ id: FilterBuilding; label: string; title: string }> = [
+  { id: 'ALL', label: 'ALL ROOMS', title: 'All University Classrooms' },
+  { id: 'EB', label: 'EB', title: 'Engineering Block (EB)' },
+  { id: 'FB', label: 'FB', title: 'Foundation Block (FB)' },
+  { id: 'SVH', label: 'SVH', title: 'Shri Vishwakarma Hall (SVH)' },
+  { id: 'LAW', label: 'LAW', title: 'School of Law (LAW)' },
 ];
 
 export const FilterChips: React.FC<FilterChipsProps> = ({
@@ -40,6 +40,7 @@ export const FilterChips: React.FC<FilterChipsProps> = ({
               <button
                 key={chip.id}
                 type="button"
+                title={chip.title}
                 aria-pressed={isSelected}
                 onClick={() => onChange(chip.id)}
                 className={`min-h-[50px] flex flex-col items-center justify-center p-2 text-xs font-mono transition-colors border focus:outline-none focus-visible:ring-1 focus-visible:ring-signal ${
@@ -76,6 +77,7 @@ export const FilterChips: React.FC<FilterChipsProps> = ({
             <button
               key={chip.id}
               type="button"
+              title={chip.title}
               aria-pressed={isSelected}
               onClick={() => onChange(chip.id)}
               className={`min-h-[44px] flex flex-col items-center justify-center p-1 text-xs font-mono transition-colors border focus:outline-none focus-visible:ring-1 focus-visible:ring-signal ${
