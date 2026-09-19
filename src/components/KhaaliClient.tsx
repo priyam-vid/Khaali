@@ -372,7 +372,7 @@ export function KhaaliClient({ initialData }: KhaaliClientProps) {
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 bg-signal shrink-0" aria-hidden="true" />
                   <span className="text-xs sm:text-sm font-bold uppercase tracking-wider text-cell-ink">
-                    SOLARI DEPARTURE BOARD // CLASSROOM VACANCY
+                    CLASSROOM VACANCY
                   </span>
                 </div>
                 <div className="text-xs text-muted tabular-nums uppercase">
